@@ -1,0 +1,60 @@
+{% extends "pages/base.html" %}
+{% block title %}Scheduled Posts - Social Media Agent{% endblock %}
+
+{% block content %}
+<h2 class="mb-4">Scheduled Posts</h2>
+
+<div class="card">
+    <table>
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Content</th>
+                <th>Platform</th>
+                <th>Type</th>
+                <th>Scheduled For</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for post in posts %}
+            <tr id="post-row-{{ post.id }}">
+                <td>{{ post.id }}</td>
+                <td><div class="post-content">{{ post.content[:100] }}{% if post.content|length > 100 %}...{% endif %}</div></td>
+                <td>{{ post.platform }}</td>
+                <td>{{ post.post_type }}</td>
+                <td>{{ post.scheduled_time or 'Not set' }}</td>
+                <td class="actions">
+                    <button class="btn btn-primary btn-sm" onclick="reschedule({{ post.id }})">Reschedule</button>
+                    <button class="btn btn-sm" style="background: var(--text-muted); color: white;" onclick="editCaption({{ post.id }})">Edit</button>
+                </td>
+            </tr>
+            {% endfor %}
+            {% if not posts %}
+            <tr><td colspan="6" class="text-muted text-sm" style="text-align: center;">No scheduled posts</td></tr>
+            {% endif %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function reschedule(id) {
+    const time = prompt('New schedule time (YYYY-MM-DD HH:MM):');
+    if (!time) return;
+    const isoTime = new Date(time).toISOString();
+    await apiCall(`/api/posts/${id}`, 'PUT', { scheduled_time: isoTime });
+    showToast('Post rescheduled!');
+    setTimeout(() => location.reload(), 1000);
+}
+
+async function editCaption(id) {
+    const content = prompt('New caption:');
+    if (!content) return;
+    await apiCall(`/api/posts/${id}`, 'PUT', { content: content });
+    showToast('Caption updated!');
+    setTimeout(() => location.reload(), 1000);
+}
+</script>
+{% endblock %}

@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Social Media Agent{% endblock %}</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <nav>
+        <div class="container">
+            <h1>Social Media Agent</h1>
+            <ul>
+                <li><a href="/" id="nav-dashboard">Dashboard</a></li>
+                <li><a href="/accounts" id="nav-accounts">Accounts</a></li>
+                <li><a href="/pending" id="nav-pending">Approvals</a></li>
+                <li><a href="/scheduled" id="nav-scheduled">Scheduled</a></li>
+                <li><a href="/history" id="nav-history">History</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <div class="container">
+        {% block content %}{% endblock %}
+    </div>
+
+    <script>
+        // Highlight active nav
+        const path = window.location.pathname;
+        document.querySelectorAll('nav a').forEach(a => {
+            if (a.getAttribute('href') === path) a.classList.add('active');
+        });
+
+        // Toast helper
+        function showToast(message, type = 'success') {
+            const toast = document.createElement('div');
+            toast.className = `toast toast-${type}`;
+            toast.textContent = message;
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 3000);
+        }
+
+        // API helper
+        async function apiCall(url, method = 'GET', body = null) {
+            const opts = { method, headers: { 'Content-Type': 'application/json' } };
+            if (body) opts.body = JSON.stringify(body);
+            const res = await fetch(url, opts);
+            return res.json();
+        }
+    </script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

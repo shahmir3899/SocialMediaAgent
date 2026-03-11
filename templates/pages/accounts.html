@@ -1,0 +1,114 @@
+{% extends "pages/base.html" %}
+{% block title %}Accounts - Social Media Agent{% endblock %}
+
+{% block content %}
+<div class="flex justify-between items-center mb-4">
+    <h2>Connected Accounts</h2>
+</div>
+
+<div class="card mb-8">
+    <h3>Connect with Facebook</h3>
+    <p class="text-sm text-muted" style="margin: 8px 0 16px;">
+        Automatically connect all your Facebook Pages and linked Instagram accounts in one step.
+    </p>
+    <a href="/api/auth/meta" class="btn btn-primary">Connect with Facebook</a>
+</div>
+
+<div class="card mb-8">
+    <h3>Connect Manually</h3>
+    <form id="connectForm" style="margin-top: 12px;">
+        <div class="grid grid-2">
+            <div class="form-group">
+                <label>Platform</label>
+                <select name="platform" required>
+                    <option value="facebook">Facebook</option>
+                    <option value="instagram">Instagram</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Page Name</label>
+                <input type="text" name="page_name" placeholder="My Business Page" required>
+            </div>
+            <div class="form-group">
+                <label>Page ID</label>
+                <input type="text" name="page_id" placeholder="123456789" required>
+            </div>
+            <div class="form-group">
+                <label>Access Token</label>
+                <input type="text" name="access_token" placeholder="EAAx..." required>
+            </div>
+        </div>
+        <button type="submit" class="btn btn-primary">Connect Account</button>
+    </form>
+</div>
+
+<div class="card">
+    <h3>Active Accounts</h3>
+    <table>
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Platform</th>
+                <th>Page Name</th>
+                <th>Page ID</th>
+                <th>Connected</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for account in accounts %}
+            <tr id="account-{{ account.id }}">
+                <td>{{ account.id }}</td>
+                <td><span class="badge badge-auto">{{ account.platform }}</span></td>
+                <td>{{ account.page_name }}</td>
+                <td>{{ account.page_id }}</td>
+                <td class="text-sm text-muted">{{ account.created_at }}</td>
+                <td>
+                    <button class="btn btn-danger btn-sm" onclick="disconnectAccount({{ account.id }})">Disconnect</button>
+                </td>
+            </tr>
+            {% endfor %}
+            {% if not accounts %}
+            <tr><td colspan="6" class="text-muted text-sm" style="text-align: center;">No accounts connected</td></tr>
+            {% endif %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('success') === '1') {
+        showToast('Accounts connected successfully!');
+    } else if (params.get('error')) {
+        const msg = params.get('error').replace(/_/g, ' ');
+        showToast('Connection failed: ' + msg, 'error');
+    }
+})();
+</script>
+
+<script>
+document.getElementById('connectForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const form = new FormData(e.target);
+    const data = Object.fromEntries(form);
+
+    const result = await apiCall('/api/accounts/connect', 'POST', data);
+    if (result.id) {
+        showToast('Account connected!');
+        setTimeout(() => location.reload(), 1000);
+    } else {
+        showToast('Connection failed', 'error');
+    }
+});
+
+async function disconnectAccount(id) {
+    if (!confirm('Disconnect this account?')) return;
+    await apiCall(`/api/accounts/${id}`, 'DELETE');
+    showToast('Account disconnected');
+    document.getElementById(`account-${id}`).remove();
+}
+</script>
+{% endblock %}

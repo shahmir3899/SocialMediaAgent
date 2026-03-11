@@ -1,0 +1,38 @@
+{% extends "pages/base.html" %}
+{% block title %}Post History - Social Media Agent{% endblock %}
+
+{% block content %}
+<h2 class="mb-4">Post History</h2>
+
+<div class="card">
+    <table>
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Content</th>
+                <th>Platform</th>
+                <th>Type</th>
+                <th>Mode</th>
+                <th>Status</th>
+                <th>Created</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for post in posts %}
+            <tr>
+                <td>{{ post.id }}</td>
+                <td><div class="post-content">{{ post.content[:100] }}{% if post.content|length > 100 %}...{% endif %}</div></td>
+                <td>{{ post.platform }}</td>
+                <td>{{ post.post_type }}</td>
+                <td><span class="badge badge-{{ post.mode }}">{{ post.mode }}</span></td>
+                <td><span class="badge badge-{{ post.status }}">{{ post.status }}</span></td>
+                <td class="text-sm text-muted">{{ post.created_at }}</td>
+            </tr>
+            {% endfor %}
+            {% if not posts %}
+            <tr><td colspan="7" class="text-muted text-sm" style="text-align: center;">No posts yet</td></tr>
+            {% endif %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

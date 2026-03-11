@@ -1,0 +1,69 @@
+{% extends "pages/base.html" %}
+{% block title %}Pending Approvals - Social Media Agent{% endblock %}
+
+{% block content %}
+<h2 class="mb-4">Pending Approvals</h2>
+
+{% for post in posts %}
+<div class="card" id="post-{{ post.id }}">
+    <div class="flex justify-between items-center mb-4">
+        <div>
+            <span class="badge badge-{{ post.status }}">{{ post.status }}</span>
+            <span class="badge badge-manual">{{ post.mode }}</span>
+            <span class="text-sm text-muted" style="margin-left: 8px;">{{ post.platform }} | {{ post.post_type }}</span>
+        </div>
+        <span class="text-sm text-muted">Post #{{ post.id }}</span>
+    </div>
+
+    <div class="form-group">
+        <label>Caption</label>
+        <textarea id="content-{{ post.id }}">{{ post.content }}</textarea>
+    </div>
+
+    {% if post.image_url %}
+    <p class="text-sm text-muted mb-4">Image: {{ post.image_url }}</p>
+    {% endif %}
+
+    <div class="form-group">
+        <label>Reviewer Notes</label>
+        <input type="text" id="notes-{{ post.id }}" placeholder="Optional notes...">
+    </div>
+
+    <div class="actions">
+        <button class="btn btn-success" onclick="approvePost({{ post.id }})">Approve</button>
+        <button class="btn btn-danger" onclick="rejectPost({{ post.id }})">Reject</button>
+        <button class="btn btn-primary" onclick="editPost({{ post.id }})">Save Edit</button>
+    </div>
+</div>
+{% endfor %}
+
+{% if not posts %}
+<div class="card">
+    <p class="text-muted" style="text-align: center;">No posts pending approval</p>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function approvePost(id) {
+    const notes = document.getElementById(`notes-${id}`).value;
+    await apiCall(`/api/posts/${id}/approve`, 'POST', { reviewer_notes: notes });
+    showToast('Post approved!');
+    document.getElementById(`post-${id}`).remove();
+}
+
+async function rejectPost(id) {
+    const notes = document.getElementById(`notes-${id}`).value;
+    await apiCall(`/api/posts/${id}/reject`, 'POST', { reviewer_notes: notes });
+    showToast('Post rejected');
+    document.getElementById(`post-${id}`).remove();
+}
+
+async function editPost(id) {
+    const content = document.getElementById(`content-${id}`).value;
+    await apiCall(`/api/posts/${id}`, 'PUT', { content: content });
+    showToast('Post updated!');
+}
+</script>
+{% endblock %}
