@@ -18,10 +18,11 @@ services:
     volumes:
       - certbot-www:/var/www/certbot
       - certbot-certs:/etc/letsencrypt
-    # Renew certificates — run manually or via cron:
+    # Idle by default; run cert commands with:
+    #   docker compose run --rm certbot certonly ...
     #   docker compose run --rm certbot renew
-    entrypoint: ""
-    command: "true"
+    entrypoint: "/bin/sh"
+    command: "-c 'exit 0'"
 
   # ── Application ──
   app:

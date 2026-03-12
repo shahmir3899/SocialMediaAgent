@@ -47,7 +47,7 @@ sleep 5
 
 # ── Step 5: Obtain SSL certificate ──
 echo "[5/5] Requesting Let's Encrypt certificate ..."
-sudo docker compose run --rm certbot certonly \
+sudo docker compose run --rm --entrypoint certbot certbot certonly \
   --webroot \
   --webroot-path=/var/www/certbot \
   --email "$EMAIL" \
@@ -70,4 +70,4 @@ echo "  1. Add https://$DOMAIN/api/auth/meta/callback"
 echo "     to Facebook Developer Console → Valid OAuth Redirect URIs"
 echo ""
 echo "  2. Set up auto-renewal (add to crontab):"
-echo "     0 3 * * 0 cd $PROJECT_DIR && sudo docker compose run --rm certbot renew && sudo docker compose exec nginx nginx -s reload"
+echo "     0 3 * * 0 cd $PROJECT_DIR && sudo docker compose run --rm --entrypoint certbot certbot renew && sudo docker compose exec nginx nginx -s reload"
