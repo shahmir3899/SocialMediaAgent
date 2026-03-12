@@ -1,38 +1,36 @@
-version: "3.8"
-
 services:
-  db:
-    image: postgres:16-alpine
+  # ── Nginx reverse-proxy + Let's Encrypt TLS ──
+  nginx:
+    image: nginx:alpine
     restart: unless-stopped
-    environment:
-      POSTGRES_DB: social_media_agent
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
     ports:
-      - "5432:5432"
+      - "80:80"
+      - "443:443"
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - certbot-www:/var/www/certbot:ro
+      - certbot-certs:/etc/letsencrypt:ro
+    depends_on:
+      - app
 
-  redis:
-    image: redis:7-alpine
-    restart: unless-stopped
-    ports:
-      - "6379:6379"
+  certbot:
+    image: certbot/certbot
+    volumes:
+      - certbot-www:/var/www/certbot
+      - certbot-certs:/etc/letsencrypt
+    # Renew certificates — run manually or via cron:
+    #   docker compose run --rm certbot renew
+    entrypoint: ""
+    command: "true"
 
+  # ── Application ──
   app:
     build: .
     restart: unless-stopped
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000
-    volumes:
-      - .:/app
-    ports:
-      - "8000:8000"
-    environment:
-      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@db:5432/social_media_agent
-      - DATABASE_URL_SYNC=postgresql://postgres:postgres@db:5432/social_media_agent
-      - REDIS_URL=redis://redis:6379/0
-      - CELERY_BROKER_URL=redis://redis:6379/0
-      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+    env_file: .env
+    expose:
+      - "8000"
     depends_on:
       - db
       - redis
@@ -41,14 +39,7 @@ services:
     build: .
     restart: unless-stopped
     command: celery -A app.core.celery_app worker --loglevel=info -P solo
-    volumes:
-      - .:/app
-    environment:
-      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@db:5432/social_media_agent
-      - DATABASE_URL_SYNC=postgresql://postgres:postgres@db:5432/social_media_agent
-      - REDIS_URL=redis://redis:6379/0
-      - CELERY_BROKER_URL=redis://redis:6379/0
-      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+    env_file: .env
     depends_on:
       - db
       - redis
@@ -57,17 +48,31 @@ services:
     build: .
     restart: unless-stopped
     command: celery -A app.core.celery_app beat --loglevel=info
-    volumes:
-      - .:/app
-    environment:
-      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@db:5432/social_media_agent
-      - DATABASE_URL_SYNC=postgresql://postgres:postgres@db:5432/social_media_agent
-      - REDIS_URL=redis://redis:6379/0
-      - CELERY_BROKER_URL=redis://redis:6379/0
-      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+    env_file: .env
     depends_on:
       - db
       - redis
 
+  # ── Data stores (internal only, no published ports) ──
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: social_media_agent
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    expose:
+      - "5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    expose:
+      - "6379"
+
 volumes:
   pgdata:
+  certbot-www:
+  certbot-certs:

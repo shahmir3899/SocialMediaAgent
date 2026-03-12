@@ -21,3 +21,7 @@ node_modules/
 # Local SSH keys
 ssh-key-*.key
 ssh-key-*.pub
+
+# Nginx generated configs (templates are committed, active/https are per-server)
+nginx/conf.d/active.conf
+nginx/conf.d/https.conf
