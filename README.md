@@ -86,12 +86,14 @@ python run.py
 **Terminal 2 — Celery worker**
 ```bash
 # Mac/Linux
-celery -A app.core.celery_app worker --loglevel=info
+celery -A app.core.celery_app worker --loglevel=info -P solo
 
 # Windows (requires gevent)
 pip install gevent
 celery -A app.core.celery_app worker --loglevel=info -P gevent
 ```
+
+`-P solo` is recommended with the current async SQLAlchemy task pattern to avoid event-loop mismatch errors.
 
 **Terminal 3 — Celery beat scheduler (cron)**
 ```bash
