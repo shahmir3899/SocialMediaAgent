@@ -157,6 +157,7 @@ Once Celery beat is running, these tasks fire on a schedule:
 | Task | Schedule | What it does |
 |---|---|---|
 | `generate_daily_posts` | Every 24h | Creates 6 AI posts (3 educational, 2 engagement, 1 promotional) |
+| `schedule_posts` | Every 5min | Assigns publish times to ready posts (`draft`/`approved`) |
 | `publish_scheduled_posts` | Every 60s | Publishes all posts whose scheduled time has passed |
 | `retry_failed_posts` | Every 5min | Re-queues failed posts (up to 3 attempts) |
 

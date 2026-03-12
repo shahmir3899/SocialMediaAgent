@@ -26,6 +26,10 @@ celery_app.conf.update(
             "task": "app.tasks.content_tasks.generate_daily_posts",
             "schedule": 3600.0 * 24,  # daily
         },
+        "schedule-ready-posts": {
+            "task": "app.tasks.content_tasks.schedule_posts",
+            "schedule": 300.0,  # every 5 minutes
+        },
         "publish-scheduled-posts": {
             "task": "app.tasks.post_publisher.publish_scheduled_posts",
             "schedule": 60.0,  # every minute

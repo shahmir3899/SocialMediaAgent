@@ -26,7 +26,7 @@ class ApprovalService:
         return list(result.scalars().all())
 
     async def approve_post(self, post_id: int, data: ApprovalAction | None = None) -> Post | None:
-        """Approve a post and move it to scheduled status."""
+        """Approve a post and mark it ready for automatic scheduling."""
         post = await self._get_post(post_id)
         if not post:
             return None
@@ -34,8 +34,8 @@ class ApprovalService:
         if post.status != PostStatus.PENDING:
             logger.warning(f"Post {post_id} is not pending, current status: {post.status}")
 
-        # Update post status
-        post.status = PostStatus.SCHEDULED
+        # Mark as approved; scheduler task will assign time and move to SCHEDULED.
+        post.status = PostStatus.APPROVED
 
         # Update approval queue
         approval = await self._get_approval(post_id)
@@ -46,7 +46,7 @@ class ApprovalService:
                 approval.reviewer_notes = data.reviewer_notes
 
         await self.db.flush()
-        logger.info(f"Post {post_id} approved and scheduled")
+        logger.info(f"Post {post_id} approved and queued for scheduling")
         return post
 
     async def reject_post(self, post_id: int, data: ApprovalAction | None = None) -> Post | None:

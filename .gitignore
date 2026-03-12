@@ -17,3 +17,7 @@ build/
 htmlcov/
 node_modules/
 .next/
+
+# Local SSH keys
+ssh-key-*.key
+ssh-key-*.pub
