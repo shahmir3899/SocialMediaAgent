@@ -1,5 +1,6 @@
 """Content scheduling service for daily post generation and scheduling."""
 
+import random
 from datetime import datetime, timedelta, timezone
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -21,6 +22,61 @@ DAILY_STRATEGY = {
     "promotional": 1,
 }
 
+# Topic pools per post type — shuffled daily to ensure variety
+TOPIC_POOLS = {
+    "educational": [
+        "productivity tips for remote workers",
+        "the science of habit building",
+        "how AI is transforming everyday tasks",
+        "financial literacy basics everyone should know",
+        "effective communication in the digital age",
+        "the psychology behind decision making",
+        "sustainable living tips for beginners",
+        "the future of renewable energy",
+        "how to build a personal brand online",
+        "nutrition myths debunked by science",
+        "time management strategies that actually work",
+        "the impact of technology on mental health",
+        "understanding data privacy in social media",
+        "creative problem-solving techniques",
+        "benefits of continuous learning and upskilling",
+    ],
+    "engagement": [
+        "what is one skill you wish you learned earlier",
+        "morning routines vs night routines — which team are you on",
+        "share your biggest lesson from this year so far",
+        "what book or podcast changed your perspective",
+        "if you could master one thing overnight what would it be",
+        "unpopular opinion about your industry — go",
+        "what does work-life balance look like for you",
+        "best advice you ever received from a mentor",
+        "what motivates you to keep going on tough days",
+        "describe your dream project in three words",
+    ],
+    "promotional": [
+        "how our service helps small businesses grow",
+        "why automation saves you hours every week",
+        "client success stories that inspire us",
+        "special offer for new followers this month",
+        "behind the scenes of how we built our platform",
+        "top features our users love most",
+        "join our community of forward-thinking creators",
+    ],
+    "quote": [
+        "an inspiring quote about perseverance",
+        "a thought-provoking quote about innovation",
+        "a motivational quote about growth mindset",
+        "an insightful quote about leadership",
+        "a powerful quote about creativity and imagination",
+    ],
+    "announcement": [
+        "exciting new feature we just launched",
+        "upcoming event you will not want to miss",
+        "milestone we just reached as a community",
+        "partnership announcement that benefits our users",
+    ],
+}
+
 
 class ContentScheduler:
     """Generates and schedules daily content based on the content strategy."""
@@ -37,15 +93,23 @@ class ContentScheduler:
         posts = []
 
         for post_type, count in DAILY_STRATEGY.items():
-            for i in range(count):
+            # Pick random unique topics for this post type
+            pool = TOPIC_POOLS.get(post_type, [])
+            topics = random.sample(pool, min(count, len(pool))) if pool else [None] * count
+            # Pad with None if pool is smaller than count
+            while len(topics) < count:
+                topics.append(None)
+
+            for i, topic in enumerate(topics):
                 try:
                     generated = await self.agent.generate_post(
                         post_type=post_type,
                         platform=platform,
+                        topic=topic,
                     )
                     post = await self._save_generated_post(generated, platform)
                     posts.append(post)
-                    logger.info(f"Generated {post_type} post {i+1}/{count}")
+                    logger.info(f"Generated {post_type} post {i+1}/{count} topic='{topic}'")
                 except Exception as e:
                     logger.error(f"Failed to generate {post_type} post: {e}")
 

@@ -9,6 +9,7 @@ POST_GENERATION_PROMPT = """Generate a {post_type} social media post for {platfo
 {topic_instruction}
 
 Requirements:
+- The post MUST be unique and different from any previously generated content
 - Caption should be engaging, concise, and platform-appropriate
 - Include 3-5 relevant hashtags
 - Suggest an image concept that would complement the post
