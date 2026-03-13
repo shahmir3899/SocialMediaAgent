@@ -1,0 +1,47 @@
+{% set composer_id = composer_id | default('generate-post-composer') %}
+{% set composer_title = composer_title | default('Generate a Post') %}
+
+<div class="card generate-composer" id="{{ composer_id }}" data-generate-composer>
+    <h3>{{ composer_title }}</h3>
+
+    <div class="grid grid-2 composer-grid" style="margin-top: 12px;">
+        <div class="form-group">
+            <label for="{{ composer_id }}-platform">Platform</label>
+            <select id="{{ composer_id }}-platform" data-role="platform">
+                <option value="facebook">Facebook</option>
+                <option value="instagram">Instagram</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="{{ composer_id }}-type">Post Type</label>
+            <select id="{{ composer_id }}-type" data-role="post-type">
+                <option value="educational">Educational</option>
+                <option value="engagement">Engagement</option>
+                <option value="promotional">Promotional</option>
+                <option value="quote">Quote</option>
+                <option value="announcement">Announcement</option>
+            </select>
+        </div>
+    </div>
+
+    <div class="form-group">
+        <label>Quick Topic Ideas</label>
+        <div class="chip-list" data-role="preset-list"></div>
+    </div>
+
+    <div class="form-group">
+        <label for="{{ composer_id }}-topic">Topic (editable)</label>
+        <input id="{{ composer_id }}-topic" data-role="topic" type="text" placeholder="Pick a quick topic above or type your own...">
+    </div>
+
+    <div class="form-group">
+        <label for="{{ composer_id }}-keywords">Additional Keywords (optional)</label>
+        <input id="{{ composer_id }}-keywords" data-role="keywords" type="text" placeholder="Example: ROI, lead generation, startup founders">
+    </div>
+
+    <div class="actions">
+        <button class="btn btn-primary" data-role="generate-btn">Generate Post</button>
+    </div>
+
+    <div class="composer-result" data-role="result" style="display: none;"></div>
+</div>

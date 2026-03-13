@@ -80,6 +80,7 @@ class GeneratePostRequest(BaseModel):
     post_type: str = "educational"
     platform: str = "facebook"
     topic: str | None = None
+    additional_keywords: str | None = None
     account_id: int | None = None
 
 

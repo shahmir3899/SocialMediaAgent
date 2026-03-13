@@ -32,6 +32,20 @@ router = APIRouter()
 settings = get_settings()
 
 
+def _compose_topic(topic: str | None, additional_keywords: str | None) -> str | None:
+    """Build a single topic string from a preset topic and optional extra keywords."""
+    clean_topic = (topic or "").strip()
+    clean_keywords = (additional_keywords or "").strip()
+
+    if clean_topic and clean_keywords:
+        return f"{clean_topic}. Include these keywords naturally: {clean_keywords}"
+    if clean_topic:
+        return clean_topic
+    if clean_keywords:
+        return f"Focus on these keywords: {clean_keywords}"
+    return None
+
+
 # ─── Account Endpoints ───
 
 @router.post("/accounts/connect", response_model=AccountResponse)
@@ -159,10 +173,11 @@ async def generate_post(data: GeneratePostRequest):
     """Generate a post using AI."""
     logger.info(f"Generating {data.post_type} post for {data.platform}")
     agent = ContentAgent()
+    topic = _compose_topic(data.topic, data.additional_keywords)
     result = await agent.generate_post(
         post_type=data.post_type,
         platform=data.platform,
-        topic=data.topic,
+        topic=topic,
     )
     return result
 
@@ -176,7 +191,7 @@ async def generate_and_save_post(
     import random
     from app.scheduler.content_scheduler import TOPIC_POOLS
 
-    topic = data.topic
+    topic = _compose_topic(data.topic, data.additional_keywords)
     if not topic:
         pool = TOPIC_POOLS.get(data.post_type, TOPIC_POOLS.get("educational", []))
         if pool:

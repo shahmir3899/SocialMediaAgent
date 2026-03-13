@@ -27,7 +27,6 @@
     <div class="card">
         <h3>Quick Actions</h3>
         <div class="flex gap-2" style="margin-top: 12px;">
-            <button class="btn btn-primary" onclick="generatePost()">Generate Post</button>
             <a href="/pending" class="btn btn-primary" style="background: var(--warning);">Review Pending</a>
         </div>
     </div>
@@ -39,6 +38,10 @@
         </div>
     </div>
 </div>
+
+{% set composer_id = 'dashboard-generate-composer' %}
+{% set composer_title = 'Generate New Post' %}
+{% include "components/generate_post_composer.html" %}
 
 <div class="card" style="margin-top: 16px;">
     <h3>Recent Posts</h3>
@@ -86,24 +89,7 @@
 
 {% block scripts %}
 <script>
-async function generatePost() {
-    const type = prompt('Post type (educational, engagement, promotional, quote):', 'educational');
-    if (!type) return;
-    const platform = prompt('Platform (facebook, instagram):', 'facebook');
-    if (!platform) return;
-
-    showToast('Generating post...');
-    const result = await apiCall('/api/posts/generate-and-save', 'POST', {
-        post_type: type, platform: platform
-    });
-
-    if (result.id) {
-        showToast('Post generated successfully!');
-        setTimeout(() => location.reload(), 1000);
-    } else {
-        showToast('Generation failed', 'error');
-    }
-}
+initGeneratePostComposer('dashboard-generate-composer');
 
 async function publishNow(postId) {
     if (!confirm('Publish this post to Facebook/Instagram now?')) return;

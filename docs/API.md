@@ -67,7 +67,8 @@ Body:
 {
   "post_type": "educational",
   "platform": "facebook",
-  "topic": "social media marketing tips"
+  "topic": "social media marketing tips",
+  "additional_keywords": "ROI, startup founders"
 }
 ```
 Response:

@@ -21,7 +21,10 @@
     </div>
 
     {% if post.image_url %}
-    <p class="text-sm text-muted mb-4">Image: {{ post.image_url }}</p>
+    <div class="post-image-preview mb-4">
+        <img src="{{ post.image_url }}" alt="Generated image for post {{ post.id }}" loading="lazy" referrerpolicy="no-referrer">
+        <a href="{{ post.image_url }}" target="_blank" rel="noopener noreferrer" class="text-sm">Open full image</a>
+    </div>
     {% endif %}
 
     <div class="form-group">
