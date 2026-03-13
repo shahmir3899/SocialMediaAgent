@@ -41,6 +41,8 @@ services:
     restart: unless-stopped
     command: celery -A app.core.celery_app worker --loglevel=info -P solo
     env_file: .env
+    environment:
+      USE_NULL_POOL: "true"
     depends_on:
       - db
       - redis
@@ -50,6 +52,8 @@ services:
     restart: unless-stopped
     command: celery -A app.core.celery_app beat --loglevel=info
     env_file: .env
+    environment:
+      USE_NULL_POOL: "true"
     depends_on:
       - db
       - redis
