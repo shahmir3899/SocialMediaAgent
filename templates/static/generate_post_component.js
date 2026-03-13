@@ -114,8 +114,11 @@ function initGeneratePostComposer(rootId, options = {}) {
             additional_keywords: keywordsEl.value.trim() || null
         };
 
+        const label = generateBtn.querySelector(".btn-label");
+        const spinner = generateBtn.querySelector(".btn-spinner");
         generateBtn.disabled = true;
-        generateBtn.textContent = "Generating...";
+        if (label) label.textContent = "Generating";
+        if (spinner) spinner.style.display = "inline-block";
         showToast("Generating post...");
 
         try {
@@ -133,7 +136,8 @@ function initGeneratePostComposer(rootId, options = {}) {
             showToast(`Generation failed: ${err.message || "Network error"}`, "error");
         } finally {
             generateBtn.disabled = false;
-            generateBtn.textContent = "Generate Post";
+            if (label) label.textContent = "Generate Post";
+            if (spinner) spinner.style.display = "none";
         }
     });
 
