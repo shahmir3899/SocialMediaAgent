@@ -164,6 +164,42 @@ sudo docker compose up -d --build
 sudo docker compose logs --tail=100
 ```
 
+### 502 Bad Gateway
+
+Nginx is running but can't reach the FastAPI app. This happens when nginx starts before the app is ready and caches a stale container IP.
+
+**Fix:** Restart nginx after all containers are up:
+
+```bash
+sudo docker compose restart nginx
+```
+
+### Celery Tasks Failing (Event Loop Errors)
+
+If celery-worker logs show `Future attached to a different loop` or `RuntimeError: Event loop is closed`:
+
+- **Cause:** Celery tasks use `run_async()` which creates a new asyncio event loop per task. Pooled asyncpg connections are bound to the loop that created them and can't be reused across loops.
+- **Fix:** The `USE_NULL_POOL=true` env var is set on celery-worker and celery-beat in `docker-compose.yml`. This makes SQLAlchemy use `NullPool` (fresh connection per task) instead of connection pooling. If this env var is missing, add it back:
+
+```yaml
+celery-worker:
+  environment:
+    USE_NULL_POOL: "true"
+
+celery-beat:
+  environment:
+    USE_NULL_POOL: "true"
+```
+
+### Verify Celery Tasks Are Working
+
+```bash
+# Check recent task successes/failures
+sudo docker compose logs --since 5m celery-worker 2>&1 | grep -E 'succeeded|failed|ERROR'
+
+# All tasks should show "succeeded". If you see "Event loop" errors, see above.
+```
+
 ### SSL Certificate Renewal
 
 Certificate expires **2026-06-10**. To renew:
