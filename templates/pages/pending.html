@@ -8,9 +8,9 @@
 <div class="card" id="post-{{ post.id }}">
     <div class="flex justify-between items-center mb-4">
         <div>
-            <span class="badge badge-{{ post.status }}">{{ post.status }}</span>
-            <span class="badge badge-manual">{{ post.mode }}</span>
-            <span class="text-sm text-muted" style="margin-left: 8px;">{{ post.platform }} | {{ post.post_type }}</span>
+            <span class="badge badge-{{ post.status.value if post.status else 'draft' }}">{{ post.status.value if post.status else '-' }}</span>
+            <span class="badge badge-manual">{{ post.mode.value if post.mode else '-' }}</span>
+            <span class="text-sm text-muted" style="margin-left: 8px;">{{ post.platform }} | {{ post.post_type.value if post.post_type else '-' }}</span>
         </div>
         <span class="text-sm text-muted">Post #{{ post.id }}</span>
     </div>

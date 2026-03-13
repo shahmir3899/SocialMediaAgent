@@ -124,7 +124,7 @@ class ContentAgent:
                     {"role": "system", "content": SYSTEM_PROMPT},
                     {"role": "user", "content": prompt},
                 ],
-                temperature=0.8,
+                temperature=1.0,
                 max_tokens=1000,
             )
 

@@ -23,9 +23,9 @@
                 <td>{{ post.id }}</td>
                 <td><div class="post-content">{{ post.content[:100] }}{% if post.content|length > 100 %}...{% endif %}</div></td>
                 <td>{{ post.platform }}</td>
-                <td>{{ post.post_type }}</td>
-                <td><span class="badge badge-{{ post.mode }}">{{ post.mode }}</span></td>
-                <td><span class="badge badge-{{ post.status }}">{{ post.status }}</span></td>
+                <td>{{ post.post_type.value if post.post_type else '-' }}</td>
+                <td><span class="badge badge-{{ post.mode.value if post.mode else 'auto' }}">{{ post.mode.value if post.mode else '-' }}</span></td>
+                <td><span class="badge badge-{{ post.status.value if post.status else 'draft' }}">{{ post.status.value if post.status else '-' }}</span></td>
                 <td class="text-sm text-muted">{{ post.created_at }}</td>
             </tr>
             {% endfor %}

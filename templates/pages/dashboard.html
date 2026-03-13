@@ -61,9 +61,9 @@
                 <td>{{ post.id }}</td>
                 <td><div class="post-content">{{ post.content[:80] }}{% if post.content|length > 80 %}...{% endif %}</div></td>
                 <td>{{ post.platform }}</td>
-                <td>{{ post.post_type }}</td>
-                <td><span class="badge badge-{{ post.mode }}">{{ post.mode }}</span></td>
-                <td><span class="badge badge-{{ post.status }}" id="status-{{ post.id }}">{{ post.status }}</span></td>
+                <td>{{ post.post_type.value if post.post_type else '-' }}</td>
+                <td><span class="badge badge-{{ post.mode.value if post.mode else 'auto' }}">{{ post.mode.value if post.mode else '-' }}</span></td>
+                <td><span class="badge badge-{{ post.status.value if post.status else 'draft' }}" id="status-{{ post.id }}">{{ post.status.value if post.status else '-' }}</span></td>
                 <td>{{ post.scheduled_time or '-' }}</td>
                 <td>
                     {% if post.status.value in ['draft', 'scheduled', 'failed'] %}

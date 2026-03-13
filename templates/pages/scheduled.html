@@ -22,7 +22,7 @@
                 <td>{{ post.id }}</td>
                 <td><div class="post-content">{{ post.content[:100] }}{% if post.content|length > 100 %}...{% endif %}</div></td>
                 <td>{{ post.platform }}</td>
-                <td>{{ post.post_type }}</td>
+                <td>{{ post.post_type.value if post.post_type else '-' }}</td>
                 <td>{{ post.scheduled_time or 'Not set' }}</td>
                 <td class="actions">
                     <button class="btn btn-primary btn-sm" onclick="reschedule({{ post.id }})">Reschedule</button>

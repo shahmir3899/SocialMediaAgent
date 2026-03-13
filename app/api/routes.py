@@ -173,12 +173,21 @@ async def generate_and_save_post(
     db: AsyncSession = Depends(get_db),
 ):
     """Generate a post with AI and save it to the database."""
-    logger.info(f"Generating and saving {data.post_type} post for {data.platform}")
+    import random
+    from app.scheduler.content_scheduler import TOPIC_POOLS
+
+    topic = data.topic
+    if not topic:
+        pool = TOPIC_POOLS.get(data.post_type, TOPIC_POOLS.get("educational", []))
+        if pool:
+            topic = random.choice(pool)
+
+    logger.info(f"Generating and saving {data.post_type} post for {data.platform} topic='{topic}'")
     agent = ContentAgent()
     generated = await agent.generate_post(
         post_type=data.post_type,
         platform=data.platform,
-        topic=data.topic,
+        topic=topic,
     )
 
     service = PostService(db)
