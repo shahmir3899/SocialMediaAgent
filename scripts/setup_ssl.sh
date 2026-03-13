@@ -21,13 +21,11 @@ cd "$PROJECT_DIR"
 # ── Step 1: Replace ${DOMAIN} placeholder in nginx config ──
 echo "[1/5] Configuring Nginx for $DOMAIN ..."
 # Start with HTTP-only config for cert issuance
-cp nginx/conf.d/default-http-only.conf nginx/conf.d/active.conf
+cp nginx/conf.d/default-http-only.conf.template nginx/conf.d/active.conf
 sed -i "s|\${DOMAIN}|$DOMAIN|g" nginx/conf.d/active.conf
 # Prepare the HTTPS config (used after cert is obtained)
-cp nginx/conf.d/default.conf nginx/conf.d/https.conf
+cp nginx/conf.d/default.conf.template nginx/conf.d/https.conf
 sed -i "s|\${DOMAIN}|$DOMAIN|g" nginx/conf.d/https.conf
-# Remove template files so Nginx only loads active.conf
-rm -f nginx/conf.d/default.conf nginx/conf.d/default-http-only.conf
 
 # ── Step 2: Update .env with HTTPS redirect URI ──
 echo "[2/5] Updating .env with HTTPS redirect ..."
