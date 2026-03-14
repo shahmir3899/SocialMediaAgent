@@ -25,6 +25,15 @@
 | **db** | PostgreSQL 16 (unused, app uses Neon) | 5432 (internal) |
 | **redis** | Redis 7 (unused, app uses Upstash) | 6379 (internal) |
 
+### Docker Volumes
+
+| Volume | Purpose |
+|--------|---------|
+| **pgdata** | PostgreSQL data (unused) |
+| **certbot-www** | Let's Encrypt webroot |
+| **certbot-certs** | SSL certificates |
+| **image-cache** | Cached Pollinations images (`uploads/images/`) — shared between `app` and `celery-worker` |
+
 ## External Services
 
 | Service | Purpose | Dashboard |

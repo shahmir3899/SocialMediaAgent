@@ -78,27 +78,33 @@
 
 ### Agents (`app/agents/`)
 - `content_agent.py` — LLM-powered caption/hashtag generation
+- `image_agent.py` — Pollinations.ai image URL generation
 - `strategy_agent.py` — Content calendar planning
 
 ### Integrations (`app/integrations/`)
-- `meta_client.py` — Facebook & Instagram Graph API client
+- `meta_client.py` — Facebook & Instagram Graph API client (direct image upload, token refresh)
 
 ### Tasks (`app/tasks/`)
-- `content_tasks.py` — Daily generation and scheduling
+- `content_tasks.py` — Daily generation, scheduling, token refresh, image backfill
 - `post_publisher.py` — Publishing and retry logic
 
 ### Scheduler (`app/scheduler/`)
-- `content_scheduler.py` — Strategy-driven daily scheduling
+- `content_scheduler.py` — Strategy-driven daily scheduling (with eager image caching)
+
+### Utilities (`app/utils/`)
+- `helpers.py` — General text utilities
+- `image_cache.py` — Downloads Pollinations images to disk, serves cached thumbnails via `/api/images/{id}`
 
 ## Data Flow
 
 ```
 1. GENERATE  →  ContentAgent creates post via LLM
-2. ROUTE     →  WorkflowEngine assigns auto/manual mode
-3. APPROVE   →  Manual posts enter approval queue
-4. SCHEDULE  →  ContentScheduler assigns time slots
-5. PUBLISH   →  Celery worker calls MetaClient
-6. LOG       →  PostLog records platform response
+2. IMAGE     →  ImageAgent generates Pollinations URL, cached to disk
+3. ROUTE     →  WorkflowEngine assigns auto/manual mode
+4. APPROVE   →  Manual posts enter approval queue
+5. SCHEDULE  →  ContentScheduler assigns time slots
+6. PUBLISH   →  Celery worker downloads image + uploads to Meta API
+7. LOG       →  PostLog records platform response
 ```
 
 ## Posting Flow State Machine

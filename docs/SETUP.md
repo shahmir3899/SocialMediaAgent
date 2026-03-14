@@ -3,9 +3,9 @@
 ## Prerequisites
 
 - Python 3.12+
-- PostgreSQL 16+
-- Redis 7+
-- OpenAI API key
+- PostgreSQL 16+ (or Neon free tier)
+- Redis 7+ (or Upstash free tier)
+- Groq API key (free tier: 14,400 req/day) — or Ollama for local
 - Meta (Facebook/Instagram) App credentials
 
 ## Quick Start with Docker
@@ -44,10 +44,12 @@ cp .env.example .env
 ```
 
 Edit `.env` with your actual values:
-- `DATABASE_URL` — PostgreSQL connection string
-- `REDIS_URL` — Redis connection string
-- `OPENAI_API_KEY` — your OpenAI key
+- `DATABASE_URL` — PostgreSQL connection string (Neon recommended)
+- `REDIS_URL` / `CELERY_BROKER_URL` / `CELERY_RESULT_BACKEND` — Redis connection string (Upstash recommended)
+- `GROQ_API_KEY` — your Groq key (or set `AI_PROVIDER=ollama` for local)
 - `META_APP_ID` / `META_APP_SECRET` — from Meta Developer console
+- `META_REDIRECT_URI` — must match your domain (e.g. `https://yourdomain/api/auth/meta/callback`)
+- `FACEBOOK_GRAPH_API_VERSION` — currently `v21.0`
 
 ### 3. Setup Database
 
@@ -90,4 +92,7 @@ Navigate to `http://localhost:8000`
    - `pages_read_engagement`
    - `instagram_basic`
    - `instagram_content_publish`
-5. Copy the token to your `.env` file or connect via the dashboard
+5. On the dashboard, click **Connect Facebook & Instagram** — this opens an OAuth popup
+6. Authorize the app and select your Facebook Page
+7. The access token is automatically exchanged for a long-lived token (60 days)
+8. Tokens are auto-refreshed every 12 hours via Celery beat

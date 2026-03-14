@@ -59,8 +59,37 @@
 - Instagram requires image_url (enforced)
 
 ## Phase 10 — Dashboard
-- **Dashboard** — Stats overview, quick actions, recent posts
-- **Accounts** — Connect/disconnect Facebook & Instagram pages
-- **Approvals** — Review, edit, approve, or reject pending posts
-- **Scheduled** — View upcoming posts, reschedule, edit captions
-- **History** — Full post history with status tracking
+- **Dashboard** — Stats overview, quick actions, recent posts with image thumbnails
+- **Accounts** — Connect/disconnect Facebook & Instagram pages via OAuth popup
+- **Approvals** — Review, edit, approve, or reject pending posts (with image preview)
+- **Scheduled** — View upcoming posts, reschedule (modal), edit captions (modal)
+- **History** — Full post history with status tracking and image thumbnails
+
+## Phase 11 — Publishing Fixes (Error 324)
+- Download Pollinations.ai images as bytes before publishing
+- Upload directly to Facebook via multipart form data (avoids Facebook fetching on-demand URLs)
+- Text-only fallback when image download fails
+- Instagram image pre-warming before container creation
+
+## Phase 12 — OAuth & Token Management
+- OAuth popup flow (600×700 window, `postMessage` callback)
+- Instagram scopes: `instagram_basic`, `instagram_content_publish`
+- Graph API updated to v21.0
+- Token auto-refresh Celery task (every 12 hours, refreshes tokens expiring within 7 days)
+- Token status badges on accounts page (Active/Expired/Unknown)
+- Test connection button per account
+
+## Phase 13 — Image Caching System
+- `image_cache.py` utility: downloads Pollinations images to local disk (`uploads/images/{post_id}.jpg`)
+- `/api/images/{post_id}` endpoint: serves cached images instantly, lazy-downloads on first request
+- `/api/images/backfill` endpoint: triggers Celery task to cache all existing uncached images
+- Eager caching: new posts cache their image during creation (content_scheduler + post_service)
+- Docker volume (`image-cache`) persists images across container rebuilds
+- `onerror` fallback: broken images gracefully show "No img" placeholder
+- Thumbnail enforcement: 48×48px with hover zoom (3×), pending page capped at 200×200
+
+## Phase 14 — UI Polish
+- Modal dialogs for reschedule (datetime-local input) and edit caption (textarea)
+- Publish button with loading spinner
+- Error tooltips on failed posts showing platform response
+- Toast notification system (success/error)

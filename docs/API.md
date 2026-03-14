@@ -38,6 +38,25 @@ GET /api/accounts
 DELETE /api/accounts/{account_id}
 ```
 
+### Test Account Connection
+```
+GET /api/accounts/{account_id}/test
+```
+Response:
+```json
+{
+  "account_id": 1,
+  "valid": true
+}
+```
+
+### OAuth Flow (Popup)
+```
+GET /api/auth/meta/start → Redirects to Facebook OAuth dialog
+GET /api/auth/meta/callback → Handles OAuth callback (returns popup-closing HTML)
+```
+The accounts page opens OAuth in a popup window. On completion, the popup posts a message back to the parent window and closes automatically.
+
 ---
 
 ## Posts
@@ -165,6 +184,31 @@ Response:
   "failed": 2,
   "pending_approval": 3,
   "scheduled": 2
+}
+```
+
+---
+
+## Images
+
+### Get Post Image (Cached)
+```
+GET /api/images/{post_id}
+```
+Serves the cached image file for a post. If not cached yet, lazily downloads from Pollinations.ai on first request and caches to disk.
+
+Returns: `image/jpeg` file or `404` if no image exists.
+
+### Trigger Image Backfill
+```
+POST /api/images/backfill
+```
+Dispatches a Celery task to download and cache all uncached Pollinations images.
+Response:
+```json
+{
+  "status": "started",
+  "task_id": "341c3929-..."
 }
 ```
 
