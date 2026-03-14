@@ -4,7 +4,7 @@ import secrets
 from datetime import datetime, timezone, timedelta
 from urllib.parse import urlencode
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, HTMLResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -72,6 +72,18 @@ async def disconnect_account(account_id: int, db: AsyncSession = Depends(get_db)
     return {"message": "Account disconnected"}
 
 
+@router.post("/accounts/{account_id}/test")
+async def test_account_connection(account_id: int, db: AsyncSession = Depends(get_db)):
+    """Test whether an account's access token is still valid."""
+    service = AccountService(db)
+    account = await service.get_account(account_id)
+    if not account:
+        raise HTTPException(status_code=404, detail="Account not found")
+    meta = MetaClient()
+    is_valid = await meta.validate_token(account.access_token)
+    return {"valid": is_valid, "account_id": account_id}
+
+
 @router.get("/auth/meta")
 async def meta_oauth_start():
     """Begin Facebook OAuth: redirect browser to Facebook authorization dialog."""
@@ -79,7 +91,7 @@ async def meta_oauth_start():
     params = urlencode({
         "client_id": settings.meta_app_id,
         "redirect_uri": settings.meta_redirect_uri,
-        "scope": "pages_show_list,pages_manage_posts,pages_read_engagement",
+        "scope": "pages_show_list,pages_manage_posts,pages_read_engagement,instagram_basic,instagram_content_publish",
         "response_type": "code",
         "state": state,
     })
@@ -100,30 +112,47 @@ async def meta_oauth_callback(
     db: AsyncSession = Depends(get_db),
 ):
     """Handle Facebook OAuth callback: exchange tokens, discover pages, save accounts."""
+    def _popup_result(status: str, message: str) -> HTMLResponse:
+        """Return a small HTML page that notifies the opener window and closes."""
+        return HTMLResponse(f"""
+        <!DOCTYPE html><html><head><title>Connecting...</title></head>
+        <body>
+        <script>
+            if (window.opener) {{
+                window.opener.postMessage({{ type: 'oauth_result', status: '{status}', message: '{message}' }}, '*');
+                window.close();
+            }} else {{
+                window.location.href = '/accounts?{"success=1" if status == "success" else "error=" + message}';
+            }}
+        </script>
+        <p>Redirecting&hellip;</p>
+        </body></html>
+        """)
+
     if error:
         logger.warning(f"Facebook OAuth error: {error}")
-        return RedirectResponse(url=f"/accounts?error={error}", status_code=302)
+        return _popup_result("error", error)
 
     if not code:
-        return RedirectResponse(url="/accounts?error=missing_code", status_code=302)
+        return _popup_result("error", "missing_code")
 
     # CSRF check via state cookie
     stored_state = request.cookies.get("oauth_state")
     if not stored_state or stored_state != state:
         logger.warning("OAuth state mismatch")
-        return RedirectResponse(url="/accounts?error=state_mismatch", status_code=302)
+        return _popup_result("error", "state_mismatch")
 
     meta = MetaClient()
 
     # Exchange code for short-lived user token
     token_data = await meta.exchange_code_for_token(code)
     if not token_data.get("access_token"):
-        return RedirectResponse(url="/accounts?error=token_exchange_failed", status_code=302)
+        return _popup_result("error", "token_exchange_failed")
 
     # Exchange short-lived token for 60-day long-lived token
     long_lived_data = await meta.exchange_for_long_lived_token(token_data["access_token"])
     if not long_lived_data.get("access_token"):
-        return RedirectResponse(url="/accounts?error=long_lived_token_failed", status_code=302)
+        return _popup_result("error", "long_lived_token_failed")
 
     long_lived_token = long_lived_data["access_token"]
     expires_in = long_lived_data.get("expires_in", 5184000)
@@ -132,7 +161,7 @@ async def meta_oauth_callback(
     # Discover all managed Facebook Pages
     pages = await meta.get_managed_pages(long_lived_token)
     if not pages:
-        return RedirectResponse(url="/accounts?error=no_pages_found", status_code=302)
+        return _popup_result("error", "no_pages_found")
 
     # Save each Page and any linked Instagram account
     service = AccountService(db)
@@ -161,7 +190,7 @@ async def meta_oauth_callback(
                 token_expiry=token_expiry,
             ))
 
-    response = RedirectResponse(url="/accounts?success=1", status_code=302)
+    response = _popup_result("success", "accounts_connected")
     response.delete_cookie("oauth_state")
     return response
 

@@ -9,6 +9,7 @@
         <thead>
             <tr>
                 <th>ID</th>
+                <th>Image</th>
                 <th>Content</th>
                 <th>Platform</th>
                 <th>Type</th>
@@ -21,6 +22,15 @@
             {% for post in posts %}
             <tr>
                 <td>{{ post.id }}</td>
+                <td>
+                    {% if post.image_url %}
+                    <a href="{{ post.image_url }}" target="_blank" rel="noopener noreferrer">
+                        <img src="{{ post.image_url }}" alt="Post image" class="post-thumbnail" loading="lazy" referrerpolicy="no-referrer">
+                    </a>
+                    {% else %}
+                    <div class="post-thumbnail-empty">No img</div>
+                    {% endif %}
+                </td>
                 <td><div class="post-content">{{ post.content[:100] }}{% if post.content|length > 100 %}...{% endif %}</div></td>
                 <td>{{ post.platform }}</td>
                 <td>{{ post.post_type.value if post.post_type else '-' }}</td>
@@ -30,7 +40,7 @@
             </tr>
             {% endfor %}
             {% if not posts %}
-            <tr><td colspan="7" class="text-muted text-sm" style="text-align: center;">No posts yet</td></tr>
+            <tr><td colspan="8" class="text-muted text-sm" style="text-align: center;">No posts yet</td></tr>
             {% endif %}
         </tbody>
     </table>

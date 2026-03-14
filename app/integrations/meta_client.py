@@ -8,6 +8,9 @@ settings = get_settings()
 
 BASE_URL = f"https://graph.facebook.com/{settings.facebook_graph_api_version}"
 
+# Generous timeout for Pollinations image generation (can take 30-60s)
+_IMAGE_DOWNLOAD_TIMEOUT = httpx.Timeout(90.0, connect=15.0)
+
 
 class MetaClient:
     """Client for interacting with Facebook and Instagram Graph APIs."""
@@ -35,29 +38,57 @@ class MetaClient:
             logger.error(f"Token validation failed: {e}")
             return False
 
+    async def _download_image(self, image_url: str) -> bytes | None:
+        """Download image bytes from a URL (e.g. Pollinations on-demand generation)."""
+        try:
+            async with httpx.AsyncClient(timeout=_IMAGE_DOWNLOAD_TIMEOUT, follow_redirects=True) as client:
+                logger.info(f"Downloading image from: {image_url[:80]}...")
+                response = await client.get(image_url)
+                if response.status_code == 200 and len(response.content) > 1000:
+                    logger.info(f"Image downloaded: {len(response.content)} bytes")
+                    return response.content
+                logger.warning(f"Image download unexpected status={response.status_code} size={len(response.content)}")
+                return None
+        except Exception as e:
+            logger.error(f"Image download failed: {e}")
+            return None
+
     async def publish_facebook_post(
         self, page_id: str, access_token: str, message: str, image_url: str | None = None
     ) -> dict:
-        """Publish a post to a Facebook Page."""
+        """Publish a post to a Facebook Page.
+
+        If an image_url is provided, the image is downloaded first and uploaded
+        directly to Facebook via multipart form data.  This avoids Facebook
+        needing to fetch lazily-generated URLs (e.g. Pollinations.ai).
+
+        Falls back to a text-only post when the image cannot be downloaded.
+        """
         try:
+            image_bytes = None
+            if image_url:
+                image_bytes = await self._download_image(image_url)
+                if not image_bytes:
+                    logger.warning("Image download failed — falling back to text-only post")
+
             async with httpx.AsyncClient(timeout=self.timeout) as client:
-                if image_url:
-                    # Photo post
+                if image_bytes:
+                    # Upload image directly via multipart form data
                     endpoint = f"{self.base_url}/{page_id}/photos"
-                    payload = {
-                        "message": message,
-                        "url": image_url,
-                        "access_token": access_token,
-                    }
+                    response = await client.post(
+                        endpoint,
+                        data={"message": message, "access_token": access_token},
+                        files={"source": ("image.jpg", image_bytes, "image/jpeg")},
+                    )
                 else:
-                    # Text post
+                    # Text-only post
                     endpoint = f"{self.base_url}/{page_id}/feed"
                     payload = {
                         "message": message,
                         "access_token": access_token,
                     }
+                    response = await client.post(endpoint, data=payload)
 
-                response = await client.post(endpoint, data=payload)
                 result = response.json()
 
                 if "error" in result:
@@ -79,8 +110,15 @@ class MetaClient:
         Instagram publishing is a two-step process:
         1. Create a media container
         2. Publish the container
+
+        Instagram requires a publicly accessible image URL.  For on-demand
+        generators like Pollinations.ai we pre-warm the URL first so that
+        the image is cached and immediately available when Instagram fetches it.
         """
         try:
+            # Pre-warm the image URL so it is cached for Instagram to fetch
+            await self._download_image(image_url)
+
             async with httpx.AsyncClient(timeout=self.timeout) as client:
                 # Step 1: Create media container
                 container_response = await client.post(

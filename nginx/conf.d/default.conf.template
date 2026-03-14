@@ -49,6 +49,6 @@ server {
 
     # Static files
     location /static/ {
-        proxy_pass $upstream/static/;
+        proxy_pass $upstream$request_uri;
     }
 }

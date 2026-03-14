@@ -7,11 +7,16 @@
 </div>
 
 <div class="card mb-8">
-    <h3>Connect with Facebook</h3>
+    <h3>Connect Social Accounts</h3>
     <p class="text-sm text-muted" style="margin: 8px 0 16px;">
-        Automatically connect all your Facebook Pages and linked Instagram accounts in one step.
+        Automatically connect your Facebook Pages and linked Instagram accounts in one step.
+        A popup window will open for Facebook authorization.
     </p>
-    <a href="/api/auth/meta" class="btn btn-primary">Connect with Facebook</a>
+    <div class="flex gap-2">
+        <button class="btn btn-primary" onclick="openMetaOAuth()" id="connectFbBtn">
+            <span id="connectFbLabel">Connect Facebook &amp; Instagram</span>
+        </button>
+    </div>
 </div>
 
 <div class="card mb-8">
@@ -51,6 +56,7 @@
                 <th>Platform</th>
                 <th>Page Name</th>
                 <th>Page ID</th>
+                <th>Token Status</th>
                 <th>Connected</th>
                 <th>Actions</th>
             </tr>
@@ -61,15 +67,25 @@
                 <td>{{ account.id }}</td>
                 <td><span class="badge badge-auto">{{ account.platform }}</span></td>
                 <td>{{ account.page_name }}</td>
-                <td>{{ account.page_id }}</td>
-                <td class="text-sm text-muted">{{ account.created_at }}</td>
+                <td><span class="text-sm">{{ account.page_id }}</span></td>
                 <td>
+                    {% if account.is_token_expired %}
+                    <span class="badge badge-failed">Expired</span>
+                    {% elif account.token_expiry %}
+                    <span class="badge badge-posted">Active</span>
+                    {% else %}
+                    <span class="badge badge-draft">Unknown</span>
+                    {% endif %}
+                </td>
+                <td class="text-sm text-muted">{{ account.created_at.strftime('%Y-%m-%d %H:%M') if account.created_at else '-' }}</td>
+                <td class="actions">
+                    <button class="btn btn-sm" style="background: var(--text-muted); color: white;" onclick="testConnection({{ account.id }})">Test</button>
                     <button class="btn btn-danger btn-sm" onclick="disconnectAccount({{ account.id }})">Disconnect</button>
                 </td>
             </tr>
             {% endfor %}
             {% if not accounts %}
-            <tr><td colspan="6" class="text-muted text-sm" style="text-align: center;">No accounts connected</td></tr>
+            <tr><td colspan="7" class="text-muted text-sm" style="text-align: center;">No accounts connected</td></tr>
             {% endif %}
         </tbody>
     </table>
@@ -78,18 +94,59 @@
 
 {% block scripts %}
 <script>
+/* ── OAuth Popup Flow ── */
+let oauthPopup = null;
+
+function openMetaOAuth() {
+    const w = 600, h = 700;
+    const left = (screen.width - w) / 2;
+    const top = (screen.height - h) / 2;
+    oauthPopup = window.open(
+        '/api/auth/meta',
+        'meta_oauth',
+        `width=${w},height=${h},left=${left},top=${top},toolbar=no,menubar=no,scrollbars=yes`
+    );
+    document.getElementById('connectFbLabel').textContent = 'Waiting for authorization...';
+    document.getElementById('connectFbBtn').disabled = true;
+
+    // Poll in case postMessage doesn't fire (popup blocked or closed manually)
+    const poll = setInterval(() => {
+        if (oauthPopup && oauthPopup.closed) {
+            clearInterval(poll);
+            document.getElementById('connectFbLabel').textContent = 'Connect Facebook & Instagram';
+            document.getElementById('connectFbBtn').disabled = false;
+        }
+    }, 500);
+}
+
+window.addEventListener('message', (event) => {
+    if (!event.data || event.data.type !== 'oauth_result') return;
+    document.getElementById('connectFbLabel').textContent = 'Connect Facebook & Instagram';
+    document.getElementById('connectFbBtn').disabled = false;
+
+    if (event.data.status === 'success') {
+        showToast('Accounts connected successfully!');
+        setTimeout(() => location.reload(), 1000);
+    } else {
+        const msg = (event.data.message || 'unknown_error').replace(/_/g, ' ');
+        showToast('Connection failed: ' + msg, 'error');
+    }
+});
+
+/* ── Legacy URL-param handling (fallback if popup didn't work) ── */
 (function () {
     const params = new URLSearchParams(window.location.search);
     if (params.get('success') === '1') {
         showToast('Accounts connected successfully!');
+        history.replaceState({}, '', '/accounts');
     } else if (params.get('error')) {
         const msg = params.get('error').replace(/_/g, ' ');
         showToast('Connection failed: ' + msg, 'error');
+        history.replaceState({}, '', '/accounts');
     }
 })();
-</script>
 
-<script>
+/* ── Manual Connect ── */
 document.getElementById('connectForm').addEventListener('submit', async (e) => {
     e.preventDefault();
     const form = new FormData(e.target);
@@ -104,6 +161,22 @@ document.getElementById('connectForm').addEventListener('submit', async (e) => {
     }
 });
 
+/* ── Test Connection ── */
+async function testConnection(id) {
+    showToast('Testing connection...');
+    try {
+        const result = await apiCall(`/api/accounts/${id}/test`, 'POST');
+        if (result.valid) {
+            showToast('Token is valid!');
+        } else {
+            showToast('Token is invalid or expired', 'error');
+        }
+    } catch (err) {
+        showToast('Test failed: ' + (err.message || 'Network error'), 'error');
+    }
+}
+
+/* ── Disconnect ── */
 async function disconnectAccount(id) {
     if (!confirm('Disconnect this account?')) return;
     await apiCall(`/api/accounts/${id}`, 'DELETE');
