@@ -66,7 +66,7 @@
                 <td>
                     {% if post.image_url %}
                     <a href="/api/images/{{ post.id }}" target="_blank" rel="noopener noreferrer">
-                        <img src="/api/images/{{ post.id }}" alt="Post image" class="post-thumbnail" loading="lazy">
+                        <img src="/api/images/{{ post.id }}" alt="Post image" class="post-thumbnail" loading="lazy" onerror="this.parentElement.outerHTML='<div class=post-thumbnail-empty>No img</div>'">
                     </a>
                     {% else %}
                     <div class="post-thumbnail-empty">No img</div>

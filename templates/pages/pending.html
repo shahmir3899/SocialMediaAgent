@@ -22,7 +22,7 @@
 
     {% if post.image_url %}
     <div class="post-image-preview mb-4">
-        <img src="/api/images/{{ post.id }}" alt="Generated image for post {{ post.id }}" loading="lazy">
+        <img src="/api/images/{{ post.id }}" alt="Generated image for post {{ post.id }}" class="post-preview-img" loading="lazy" onerror="this.style.display='none'">
         <a href="/api/images/{{ post.id }}" target="_blank" rel="noopener noreferrer" class="text-sm">Open full image</a>
     </div>
     {% endif %}
