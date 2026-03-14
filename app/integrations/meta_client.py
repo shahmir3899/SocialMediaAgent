@@ -263,6 +263,14 @@ class MetaClient:
             logger.error(f"Get managed pages failed: {e}")
             return []
 
+    async def refresh_long_lived_token(self, existing_token: str) -> dict:
+        """Refresh a long-lived user token before it expires.
+
+        Long-lived tokens can be exchanged for a new 60-day token once per day.
+        This uses the same fb_exchange_token endpoint.
+        """
+        return await self.exchange_for_long_lived_token(existing_token)
+
     async def get_instagram_account(self, page_id: str, page_access_token: str) -> dict | None:
         """Get the Instagram Business Account linked to a Facebook Page, or None."""
         try:

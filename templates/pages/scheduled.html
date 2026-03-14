@@ -49,22 +49,79 @@
 {% endblock %}
 
 {% block scripts %}
+<!-- Reschedule Modal -->
+<div class="modal-overlay" id="rescheduleModal" style="display:none;">
+    <div class="modal">
+        <h3>Reschedule Post</h3>
+        <div class="form-group">
+            <label>New Date &amp; Time</label>
+            <input type="datetime-local" id="rescheduleTime">
+        </div>
+        <div class="actions">
+            <button class="btn btn-primary" onclick="submitReschedule()">Save</button>
+            <button class="btn" style="background:var(--text-muted);color:white;" onclick="closeModal('rescheduleModal')">Cancel</button>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Caption Modal -->
+<div class="modal-overlay" id="editModal" style="display:none;">
+    <div class="modal">
+        <h3>Edit Caption</h3>
+        <div class="form-group">
+            <label>Caption</label>
+            <textarea id="editCaption" rows="5"></textarea>
+        </div>
+        <div class="actions">
+            <button class="btn btn-primary" onclick="submitEdit()">Save</button>
+            <button class="btn" style="background:var(--text-muted);color:white;" onclick="closeModal('editModal')">Cancel</button>
+        </div>
+    </div>
+</div>
+
 <script>
-async function reschedule(id) {
-    const time = prompt('New schedule time (YYYY-MM-DD HH:MM):');
-    if (!time) return;
-    const isoTime = new Date(time).toISOString();
-    await apiCall(`/api/posts/${id}`, 'PUT', { scheduled_time: isoTime });
-    showToast('Post rescheduled!');
-    setTimeout(() => location.reload(), 1000);
+let activePostId = null;
+
+function openModal(id) { document.getElementById(id).style.display = 'flex'; }
+function closeModal(id) { document.getElementById(id).style.display = 'none'; activePostId = null; }
+
+// Close modals on overlay click
+document.querySelectorAll('.modal-overlay').forEach(ov => {
+    ov.addEventListener('click', (e) => { if (e.target === ov) closeModal(ov.id); });
+});
+
+function reschedule(id) {
+    activePostId = id;
+    document.getElementById('rescheduleTime').value = '';
+    openModal('rescheduleModal');
 }
 
-async function editCaption(id) {
-    const content = prompt('New caption:');
-    if (!content) return;
-    await apiCall(`/api/posts/${id}`, 'PUT', { content: content });
+async function submitReschedule() {
+    const time = document.getElementById('rescheduleTime').value;
+    if (!time) { showToast('Please select a date and time', 'error'); return; }
+    const isoTime = new Date(time).toISOString();
+    await apiCall(`/api/posts/${activePostId}`, 'PUT', { scheduled_time: isoTime });
+    showToast('Post rescheduled!');
+    closeModal('rescheduleModal');
+    setTimeout(() => location.reload(), 800);
+}
+
+function editCaption(id) {
+    activePostId = id;
+    // Pre-fill with current caption from the table cell
+    const row = document.getElementById(`post-row-${id}`);
+    const contentCell = row.querySelector('.post-content');
+    document.getElementById('editCaption').value = contentCell ? contentCell.textContent.trim() : '';
+    openModal('editModal');
+}
+
+async function submitEdit() {
+    const content = document.getElementById('editCaption').value.trim();
+    if (!content) { showToast('Caption cannot be empty', 'error'); return; }
+    await apiCall(`/api/posts/${activePostId}`, 'PUT', { content: content });
     showToast('Caption updated!');
-    setTimeout(() => location.reload(), 1000);
+    closeModal('editModal');
+    setTimeout(() => location.reload(), 800);
 }
 </script>
 {% endblock %}

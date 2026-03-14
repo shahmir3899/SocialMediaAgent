@@ -38,6 +38,10 @@ celery_app.conf.update(
             "task": "app.tasks.post_publisher.retry_failed_posts",
             "schedule": 300.0,  # every 5 minutes
         },
+        "refresh-expiring-tokens": {
+            "task": "app.tasks.content_tasks.refresh_expiring_tokens",
+            "schedule": 3600.0 * 12,  # every 12 hours
+        },
     },
 )
 
