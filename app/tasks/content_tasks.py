@@ -10,7 +10,9 @@ from app.core.database import async_session_factory
 from app.core.logging import logger
 from app.scheduler.content_scheduler import ContentScheduler
 from app.models.account import Account
+from app.models.post import Post
 from app.integrations.meta_client import MetaClient
+from app.utils.image_cache import download_and_cache, is_cached
 
 
 def run_async(coro):
@@ -112,3 +114,34 @@ def refresh_expiring_tokens(self):
         return {"status": "success", "refreshed": count}
     except Exception as e:
         logger.error(f"Task: refresh_expiring_tokens failed — {e}")
+
+
+@celery_app.task(name="app.tasks.content_tasks.backfill_image_cache")
+def backfill_image_cache():
+    """Download and cache images for all posts that have a Pollinations URL but no local cache."""
+    logger.info("Task: backfill_image_cache started")
+
+    async def _backfill():
+        async with async_session_factory() as db:
+            result = await db.execute(
+                select(Post.id, Post.image_url).where(
+                    Post.image_url.isnot(None),
+                    Post.image_url.like("%pollinations.ai%"),
+                )
+            )
+            rows = result.all()
+            cached = 0
+            for post_id, image_url in rows:
+                if is_cached(post_id):
+                    continue
+                ok = await download_and_cache(post_id, image_url)
+                if ok:
+                    cached += 1
+            return cached
+
+    try:
+        count = run_async(_backfill())
+        logger.info(f"Task: backfill_image_cache completed — {count} images cached")
+        return {"status": "success", "cached": count}
+    except Exception as e:
+        logger.error(f"Task: backfill_image_cache failed — {e}")

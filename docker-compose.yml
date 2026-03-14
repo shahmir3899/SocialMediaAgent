@@ -33,6 +33,8 @@ services:
     env_file: .env
     expose:
       - "8000"
+    volumes:
+      - image-cache:/app/uploads/images
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 10s
@@ -50,6 +52,8 @@ services:
     env_file: .env
     environment:
       USE_NULL_POOL: "true"
+    volumes:
+      - image-cache:/app/uploads/images
     depends_on:
       - db
       - redis
@@ -88,3 +92,4 @@ volumes:
   pgdata:
   certbot-www:
   certbot-certs:
+  image-cache:

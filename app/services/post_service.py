@@ -10,6 +10,7 @@ from app.models.approval import ApprovalQueue, ApprovalStatus
 from app.api.schemas import PostCreate, PostEdit, GeneratePostRequest, GeneratedPostResponse
 from app.services.workflow_engine import WorkflowEngine
 from app.agents.image_agent import ImageAgent
+from app.utils.image_cache import download_and_cache
 
 
 class PostService:
@@ -105,6 +106,11 @@ class PostService:
             f"Created AI-generated post {post.id} [{mode.value}] "
             f"image={'yes' if image_url else 'no'}"
         )
+
+        # Eagerly cache image to disk so dashboard thumbnails load instantly
+        if image_url:
+            await download_and_cache(post.id, image_url)
+
         return post
 
     async def get_post(self, post_id: int) -> Post | None:

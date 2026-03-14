@@ -4,7 +4,7 @@ import secrets
 from datetime import datetime, timezone, timedelta
 from urllib.parse import urlencode
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from fastapi.responses import RedirectResponse, HTMLResponse
+from fastapi.responses import RedirectResponse, HTMLResponse, FileResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -27,6 +27,7 @@ from app.services.post_service import PostService
 from app.services.approval_service import ApprovalService
 from app.agents.content_agent import ContentAgent
 from app.integrations.meta_client import MetaClient
+from app.utils.image_cache import is_cached, cached_path, download_and_cache
 
 router = APIRouter()
 settings = get_settings()
@@ -388,6 +389,34 @@ async def publish_post_now(post_id: int, db: AsyncSession = Depends(get_db)):
         error_msg = result.get("error", "Unknown error")
         logger.error(f"Failed to publish post {post_id}: {error_msg}")
         raise HTTPException(status_code=500, detail=f"Publish failed: {error_msg}")
+
+
+# ─── Image Cache Endpoint ───
+
+@router.get("/images/{post_id}")
+async def serve_post_image(post_id: int, db: AsyncSession = Depends(get_db)):
+    """Serve a cached post image, downloading from Pollinations on first request."""
+    if is_cached(post_id):
+        return FileResponse(cached_path(post_id), media_type="image/jpeg")
+
+    # Lazy download: fetch from the stored Pollinations URL
+    post = await db.get(Post, post_id)
+    if not post or not post.image_url:
+        raise HTTPException(status_code=404, detail="No image for this post")
+
+    ok = await download_and_cache(post_id, post.image_url)
+    if not ok:
+        raise HTTPException(status_code=502, detail="Image download failed")
+
+    return FileResponse(cached_path(post_id), media_type="image/jpeg")
+
+
+@router.post("/images/backfill")
+async def trigger_image_backfill():
+    """Trigger a Celery task to download and cache all uncached post images."""
+    from app.tasks.content_tasks import backfill_image_cache
+    task = backfill_image_cache.delay()
+    return {"status": "started", "task_id": task.id}
 
 
 # ─── Post Log Endpoints ───

@@ -12,6 +12,7 @@ from app.models.approval import ApprovalQueue, ApprovalStatus
 from app.agents.content_agent import ContentAgent
 from app.agents.image_agent import ImageAgent
 from app.services.workflow_engine import WorkflowEngine
+from app.utils.image_cache import download_and_cache
 
 settings = get_settings()
 
@@ -158,6 +159,11 @@ class ContentScheduler:
             f"Saved {post_type.value} post {post.id} [{mode.value}] "
             f"image={'yes' if image_url else 'no'}"
         )
+
+        # Eagerly cache image to disk so dashboard thumbnails load instantly
+        if image_url:
+            await download_and_cache(post.id, image_url)
+
         return post
 
     async def assign_schedule_times(self, date: datetime | None = None) -> list[Post]:

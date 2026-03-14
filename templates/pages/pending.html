@@ -22,8 +22,8 @@
 
     {% if post.image_url %}
     <div class="post-image-preview mb-4">
-        <img src="{{ post.image_url }}" alt="Generated image for post {{ post.id }}" loading="lazy" referrerpolicy="no-referrer">
-        <a href="{{ post.image_url }}" target="_blank" rel="noopener noreferrer" class="text-sm">Open full image</a>
+        <img src="/api/images/{{ post.id }}" alt="Generated image for post {{ post.id }}" loading="lazy">
+        <a href="/api/images/{{ post.id }}" target="_blank" rel="noopener noreferrer" class="text-sm">Open full image</a>
     </div>
     {% endif %}
 
