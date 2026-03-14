@@ -121,7 +121,8 @@ def backfill_image_cache():
     """Download and cache images for all posts that have a Pollinations URL but no local cache."""
     logger.info("Task: backfill_image_cache started")
 
-    async def _backfill():
+    async def _get_urls():
+        """Quickly fetch all post IDs and image URLs, then close the DB session."""
         async with async_session_factory() as db:
             result = await db.execute(
                 select(Post.id, Post.image_url).where(
@@ -129,18 +130,29 @@ def backfill_image_cache():
                     Post.image_url.like("%pollinations.ai%"),
                 )
             )
-            rows = result.all()
-            cached = 0
-            for post_id, image_url in rows:
-                if is_cached(post_id):
-                    continue
+            return [(r[0], r[1]) for r in result.all()]
+
+    async def _download_all(rows):
+        cached = 0
+        for post_id, image_url in rows:
+            if is_cached(post_id):
+                continue
+            # Retry up to 2 times for transient Pollinations errors
+            for attempt in range(3):
                 ok = await download_and_cache(post_id, image_url)
                 if ok:
                     cached += 1
-            return cached
+                    break
+                if attempt < 2:
+                    logger.info(f"[backfill] Retrying post {post_id} (attempt {attempt + 2}/3)")
+                    import asyncio
+                    await asyncio.sleep(5)
+        return cached
 
     try:
-        count = run_async(_backfill())
+        rows = run_async(_get_urls())
+        logger.info(f"Task: backfill_image_cache — {len(rows)} posts to check")
+        count = run_async(_download_all(rows))
         logger.info(f"Task: backfill_image_cache completed — {count} images cached")
         return {"status": "success", "cached": count}
     except Exception as e:
