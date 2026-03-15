@@ -2,6 +2,7 @@
 
 import ssl
 from celery import Celery
+from celery.schedules import crontab
 from app.core.config import get_settings
 
 settings = get_settings()
@@ -24,7 +25,8 @@ celery_app.conf.update(
     beat_schedule={
         "generate-daily-posts": {
             "task": "app.tasks.content_tasks.generate_daily_posts",
-            "schedule": 3600.0 * 24,  # daily
+            # Run every 4 hours; task itself enforces daily minimum guard.
+            "schedule": crontab(minute=0, hour="*/4"),
         },
         "schedule-ready-posts": {
             "task": "app.tasks.content_tasks.schedule_posts",

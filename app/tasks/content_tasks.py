@@ -2,7 +2,7 @@
 
 import asyncio
 from datetime import datetime, timezone, timedelta
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.celery_app import celery_app
@@ -26,12 +26,34 @@ def run_async(coro):
 
 @celery_app.task(name="app.tasks.content_tasks.generate_daily_posts", bind=True, max_retries=3)
 def generate_daily_posts(self):
-    """Generate daily posts according to the content strategy."""
+    """Ensure a minimum number of posts are generated each day."""
     logger.info("Task: generate_daily_posts started")
 
     async def _generate():
         async with async_session_factory() as db:
             try:
+                day_start = datetime.now(timezone.utc).replace(
+                    hour=0,
+                    minute=0,
+                    second=0,
+                    microsecond=0,
+                )
+                min_posts_per_day = 5
+                existing_today = await db.scalar(
+                    select(func.count(Post.id)).where(
+                        Post.created_at >= day_start,
+                        Post.platform == "facebook",
+                        Post.image_prompt.isnot(None),
+                    )
+                ) or 0
+
+                if existing_today >= min_posts_per_day:
+                    logger.info(
+                        "Task: generate_daily_posts skipped — "
+                        f"{existing_today} posts already created today"
+                    )
+                    return 0
+
                 scheduler = ContentScheduler(db)
                 posts = await scheduler.generate_daily_posts(platform="facebook")
                 await db.commit()

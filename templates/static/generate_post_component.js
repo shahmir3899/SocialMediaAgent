@@ -46,6 +46,7 @@ function buildPresetChips(container, presets, onClick) {
 function renderGeneratedPost(resultContainer, data) {
     const content = data.content || "";
     const imageUrl = data.image_url || "";
+    const proxiedImageUrl = data.id ? `/api/images/${data.id}` : imageUrl;
 
     const safeContent = content
         .replaceAll("&", "&amp;")
@@ -53,7 +54,7 @@ function renderGeneratedPost(resultContainer, data) {
         .replaceAll(">", "&gt;");
 
     const imageHtml = imageUrl
-        ? `<div class="generated-image-wrap"><img src="${imageUrl}" alt="Generated post image" class="generated-image" loading="lazy" referrerpolicy="no-referrer"><a href="${imageUrl}" target="_blank" rel="noopener noreferrer" class="text-sm">Open full image</a></div>`
+        ? `<div class="generated-image-wrap"><img src="${proxiedImageUrl}" alt="Generated post image" class="generated-image" loading="lazy" onerror="this.onerror=null;this.src='${imageUrl}'"><a href="${proxiedImageUrl}" target="_blank" rel="noopener noreferrer" class="text-sm">Open full image</a></div>`
         : '<p class="text-sm text-muted">No image URL returned for this post.</p>';
 
     resultContainer.innerHTML = `
