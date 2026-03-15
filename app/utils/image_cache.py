@@ -10,8 +10,8 @@ from app.core.logging import logger
 # Persistent cache directory — mounted as a Docker volume in production
 CACHE_DIR = Path(os.environ.get("IMAGE_CACHE_DIR", "uploads/images"))
 
-# Generous timeout because Pollinations generates on-the-fly
-_TIMEOUT = httpx.Timeout(120.0, connect=15.0)
+# Keep timeout bounded to avoid gateway 504s when upstream is unhealthy.
+_TIMEOUT = httpx.Timeout(35.0, connect=8.0)
 
 
 def _ensure_cache_dir() -> None:

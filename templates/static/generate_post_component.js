@@ -47,6 +47,7 @@ function renderGeneratedPost(resultContainer, data) {
     const content = data.content || "";
     const imageUrl = data.image_url || "";
     const proxiedImageUrl = data.id ? `/api/images/${data.id}` : imageUrl;
+    const placeholderImageUrl = "https://picsum.photos/seed/socialmediaagent-preview/1080/1080";
 
     const safeContent = content
         .replaceAll("&", "&amp;")
@@ -54,7 +55,7 @@ function renderGeneratedPost(resultContainer, data) {
         .replaceAll(">", "&gt;");
 
     const imageHtml = imageUrl
-        ? `<div class="generated-image-wrap"><img src="${proxiedImageUrl}" alt="Generated post image" class="generated-image" loading="lazy" onerror="this.onerror=null;this.src='${imageUrl}'"><a href="${proxiedImageUrl}" target="_blank" rel="noopener noreferrer" class="text-sm">Open full image</a></div>`
+        ? `<div class="generated-image-wrap"><img src="${proxiedImageUrl}" alt="Generated post image" class="generated-image" loading="lazy"><a href="${proxiedImageUrl}" target="_blank" rel="noopener noreferrer" class="text-sm">Open full image</a></div>`
         : '<p class="text-sm text-muted">No image URL returned for this post.</p>';
 
     resultContainer.innerHTML = `
@@ -65,6 +66,28 @@ function renderGeneratedPost(resultContainer, data) {
             ${imageHtml}
         </div>
     `;
+
+    if (imageUrl) {
+        const imgEl = resultContainer.querySelector(".generated-image");
+        const linkEl = resultContainer.querySelector(".generated-image-wrap a");
+        if (imgEl) {
+            let stage = 0;
+            imgEl.addEventListener("error", () => {
+                if (stage === 0 && imageUrl && imgEl.src !== imageUrl) {
+                    stage = 1;
+                    imgEl.src = imageUrl;
+                    if (linkEl) linkEl.href = imageUrl;
+                    return;
+                }
+                if (stage <= 1 && imgEl.src !== placeholderImageUrl) {
+                    stage = 2;
+                    imgEl.src = placeholderImageUrl;
+                    if (linkEl) linkEl.href = placeholderImageUrl;
+                }
+            });
+        }
+    }
+
     resultContainer.style.display = "block";
 }
 

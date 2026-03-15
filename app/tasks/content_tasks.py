@@ -179,3 +179,47 @@ def backfill_image_cache():
         return {"status": "success", "cached": count}
     except Exception as e:
         logger.error(f"Task: backfill_image_cache failed — {e}")
+
+
+@celery_app.task(
+    name="app.tasks.content_tasks.retry_cache_post_image",
+    bind=True,
+    max_retries=6,
+)
+def retry_cache_post_image(self, post_id: int):
+    """Retry caching image for a single post ID with exponential backoff."""
+    logger.info(f"Task: retry_cache_post_image started for post {post_id}")
+
+    async def _retry_one():
+        async with async_session_factory() as db:
+            post = await db.get(Post, post_id)
+            if not post or not post.image_url:
+                logger.warning(f"retry_cache_post_image: post {post_id} has no image_url")
+                return {"status": "missing", "post_id": post_id}
+
+            if is_cached(post_id):
+                logger.info(f"retry_cache_post_image: post {post_id} already cached")
+                return {"status": "already_cached", "post_id": post_id}
+
+            ok = await download_and_cache(post_id, post.image_url)
+            return {"status": "cached" if ok else "failed", "post_id": post_id}
+
+    try:
+        result = run_async(_retry_one())
+        if result["status"] == "failed":
+            retries = self.request.retries + 1
+            countdown = min(60 * (2 ** retries), 900)
+            logger.warning(
+                f"Task: retry_cache_post_image failed for post {post_id}; "
+                f"retrying in {countdown}s ({retries}/{self.max_retries})"
+            )
+            raise self.retry(countdown=countdown)
+
+        logger.info(
+            f"Task: retry_cache_post_image completed for post {post_id} "
+            f"status={result['status']}"
+        )
+        return result
+    except Exception as e:
+        logger.error(f"Task: retry_cache_post_image failed — {e}")
+        raise

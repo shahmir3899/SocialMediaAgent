@@ -1,6 +1,5 @@
 """API route definitions."""
 
-import asyncio
 import secrets
 from datetime import datetime, timezone, timedelta
 from urllib.parse import urlencode
@@ -405,22 +404,31 @@ async def serve_post_image(post_id: int, db: AsyncSession = Depends(get_db)):
     if not post or not post.image_url:
         raise HTTPException(status_code=404, detail="No image for this post")
 
-    ok = False
-    for attempt in range(3):
-        ok = await download_and_cache(post_id, post.image_url)
-        if ok:
-            break
-        if attempt < 2:
-            await asyncio.sleep(2)
+    ok = await download_and_cache(post_id, post.image_url)
 
-    if not ok:
-        # Fall back to source URL so UI can still render when caching fails.
+    if ok:
+        return FileResponse(cached_path(post_id), media_type="image/jpeg")
+
+    # Queue background retries so cache can self-heal once upstream recovers.
+    try:
+        from app.tasks.content_tasks import retry_cache_post_image
+        retry_cache_post_image.delay(post_id)
+    except Exception as e:
+        logger.warning(f"Failed to enqueue retry_cache_post_image for post {post_id}: {e}")
+
+    # Pollinations can intermittently fail (500/timeout). Avoid surfacing that
+    # upstream error to users by redirecting to a reliable placeholder image.
+    if "pollinations.ai" in post.image_url:
+        fallback_url = f"https://picsum.photos/seed/socialmediaagent-{post_id}/1080/1080"
         logger.warning(
-            f"Image cache miss after retries for post {post_id}; redirecting to source URL"
+            f"Image download failed for post {post_id}; using fallback image {fallback_url}"
         )
-        return RedirectResponse(url=post.image_url, status_code=307)
+        return RedirectResponse(url=fallback_url, status_code=307)
 
-    return FileResponse(cached_path(post_id), media_type="image/jpeg")
+    logger.warning(
+        f"Image download failed for post {post_id}; redirecting to source URL"
+    )
+    return RedirectResponse(url=post.image_url, status_code=307)
 
 
 @router.post("/images/backfill")
