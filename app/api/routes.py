@@ -1,5 +1,6 @@
 """API route definitions."""
 
+import asyncio
 import secrets
 from datetime import datetime, timezone, timedelta
 from urllib.parse import urlencode
@@ -404,9 +405,20 @@ async def serve_post_image(post_id: int, db: AsyncSession = Depends(get_db)):
     if not post or not post.image_url:
         raise HTTPException(status_code=404, detail="No image for this post")
 
-    ok = await download_and_cache(post_id, post.image_url)
+    ok = False
+    for attempt in range(3):
+        ok = await download_and_cache(post_id, post.image_url)
+        if ok:
+            break
+        if attempt < 2:
+            await asyncio.sleep(2)
+
     if not ok:
-        raise HTTPException(status_code=502, detail="Image download failed")
+        # Fall back to source URL so UI can still render when caching fails.
+        logger.warning(
+            f"Image cache miss after retries for post {post_id}; redirecting to source URL"
+        )
+        return RedirectResponse(url=post.image_url, status_code=307)
 
     return FileResponse(cached_path(post_id), media_type="image/jpeg")
 
