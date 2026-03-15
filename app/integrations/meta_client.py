@@ -62,14 +62,28 @@ class MetaClient:
         directly to Facebook via multipart form data.  This avoids Facebook
         needing to fetch lazily-generated URLs (e.g. Pollinations.ai).
 
-        Falls back to a text-only post when the image cannot be downloaded.
+        For image posts, this method avoids silently posting text-only content.
         """
         try:
             image_bytes = None
             if image_url:
                 image_bytes = await self._download_image(image_url)
                 if not image_bytes:
-                    logger.warning("Image download failed — falling back to text-only post")
+                    # Pollinations can intermittently fail/rate-limit; use a stable
+                    # fallback image before failing the publish.
+                    fallback_url = f"https://picsum.photos/seed/socialmediaagent-fb-{page_id}/1200/628"
+                    logger.warning(
+                        "Image download failed for primary URL — trying fallback image"
+                    )
+                    image_bytes = await self._download_image(fallback_url)
+
+                if not image_bytes:
+                    logger.error("Image download failed for Facebook image post")
+                    return {
+                        "success": False,
+                        "error": "Image download failed for Facebook image post",
+                        "response": {"image_url": image_url},
+                    }
 
             async with httpx.AsyncClient(timeout=self.timeout) as client:
                 if image_bytes:
@@ -81,7 +95,7 @@ class MetaClient:
                         files={"source": ("image.jpg", image_bytes, "image/jpeg")},
                     )
                 else:
-                    # Text-only post
+                    # Text-only post (only when caller did not provide image_url)
                     endpoint = f"{self.base_url}/{page_id}/feed"
                     payload = {
                         "message": message,
