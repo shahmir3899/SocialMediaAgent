@@ -38,23 +38,46 @@ class MetaClient:
             logger.error(f"Token validation failed: {e}")
             return False
 
-    async def _download_image(self, image_url: str) -> bytes | None:
-        """Download image bytes from a URL (e.g. Pollinations on-demand generation)."""
-        try:
-            async with httpx.AsyncClient(timeout=_IMAGE_DOWNLOAD_TIMEOUT, follow_redirects=True) as client:
-                logger.info(f"Downloading image from: {image_url[:80]}...")
-                response = await client.get(image_url)
-                if response.status_code == 200 and len(response.content) > 1000:
-                    logger.info(f"Image downloaded: {len(response.content)} bytes")
-                    return response.content
-                logger.warning(f"Image download unexpected status={response.status_code} size={len(response.content)}")
+    async def _download_image(self, image_url: str, max_retries: int = 3) -> bytes | None:
+        """Download image bytes from a URL (e.g. Pollinations on-demand generation).
+        
+        Retries on connection/timeout errors with exponential backoff.
+        Does not retry on HTTP 4xx/5xx errors (Pollinations service issues).
+        """
+        import asyncio
+        
+        for attempt in range(max_retries):
+            try:
+                async with httpx.AsyncClient(timeout=_IMAGE_DOWNLOAD_TIMEOUT, follow_redirects=True) as client:
+                    logger.info(f"Downloading image from: {image_url[:80]}... (attempt {attempt + 1}/{max_retries})")
+                    response = await client.get(image_url)
+                    if response.status_code == 200 and len(response.content) > 1000:
+                        logger.info(f"Image downloaded: {len(response.content)} bytes")
+                        return response.content
+                    elif response.status_code >= 400:
+                        # Don't retry on HTTP errors (Pollinations service issues)
+                        logger.warning(f"Image download failed with HTTP {response.status_code}, not retrying")
+                        return None
+                    else:
+                        logger.warning(f"Image download unexpected status={response.status_code} size={len(response.content)}")
+                        return None
+            except (httpx.TimeoutException, httpx.ConnectError, httpx.NetworkError) as e:
+                if attempt < max_retries - 1:
+                    # Exponential backoff: 10s, 30s, 90s
+                    backoff_seconds = 10 * (3 ** attempt)
+                    logger.warning(f"Image download failed (attempt {attempt + 1}/{max_retries}): {e}. Retrying in {backoff_seconds}s...")
+                    await asyncio.sleep(backoff_seconds)
+                else:
+                    logger.error(f"Image download failed after {max_retries} attempts: {e}")
+                    return None
+            except Exception as e:
+                logger.error(f"Image download failed with unexpected error: {e}")
                 return None
-        except Exception as e:
-            logger.error(f"Image download failed: {e}")
-            return None
+        
+        return None
 
     async def publish_facebook_post(
-        self, page_id: str, access_token: str, message: str, image_url: str | None = None
+        self, page_id: str, access_token: str, message: str, image_url: str | None = None, post_id: int | None = None
     ) -> dict:
         """Publish a post to a Facebook Page.
 
@@ -71,7 +94,8 @@ class MetaClient:
                 if not image_bytes:
                     # Pollinations can intermittently fail/rate-limit; use a stable
                     # fallback image before failing the publish.
-                    fallback_url = f"https://picsum.photos/seed/socialmediaagent-fb-{page_id}/1200/628"
+                    fallback_seed = post_id if post_id else page_id
+                    fallback_url = f"https://picsum.photos/seed/socialmediaagent-fb-{fallback_seed}/1200/628"
                     logger.warning(
                         "Image download failed for primary URL — trying fallback image"
                     )
@@ -117,7 +141,7 @@ class MetaClient:
             return {"success": False, "error": str(e)}
 
     async def publish_instagram_post(
-        self, ig_user_id: str, access_token: str, caption: str, image_url: str
+        self, ig_user_id: str, access_token: str, caption: str, image_url: str, post_id: int | None = None
     ) -> dict:
         """Publish a post to Instagram (requires image_url).
 

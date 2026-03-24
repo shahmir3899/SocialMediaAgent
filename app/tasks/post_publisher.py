@@ -163,6 +163,7 @@ async def _publish_single_post(db, post: Post) -> bool:
             access_token=account.access_token,
             message=post.content,
             image_url=post.image_url,
+            post_id=post.id,
         )
     elif post.platform == "instagram":
         if not post.image_url:
@@ -181,6 +182,7 @@ async def _publish_single_post(db, post: Post) -> bool:
             access_token=account.access_token,
             caption=post.content,
             image_url=post.image_url,
+            post_id=post.id,
         )
     else:
         logger.error(f"Unsupported platform: {post.platform}")

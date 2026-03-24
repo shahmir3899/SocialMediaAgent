@@ -357,6 +357,7 @@ async def publish_post_now(post_id: int, db: AsyncSession = Depends(get_db)):
             access_token=account.access_token,
             message=post.content,
             image_url=post.image_url,
+            post_id=post.id,
         )
     elif post.platform == "instagram":
         if not post.image_url:
@@ -366,6 +367,7 @@ async def publish_post_now(post_id: int, db: AsyncSession = Depends(get_db)):
             access_token=account.access_token,
             caption=post.content,
             image_url=post.image_url,
+            post_id=post.id,
         )
     else:
         raise HTTPException(status_code=400, detail=f"Unsupported platform: {post.platform}")

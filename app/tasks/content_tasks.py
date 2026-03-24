@@ -10,7 +10,7 @@ from app.core.database import async_session_factory
 from app.core.logging import logger
 from app.scheduler.content_scheduler import ContentScheduler
 from app.models.account import Account
-from app.models.post import Post
+from app.models.post import Post, PostStatus
 from app.integrations.meta_client import MetaClient
 from app.utils.image_cache import download_and_cache, is_cached
 
@@ -222,4 +222,74 @@ def retry_cache_post_image(self, post_id: int):
         return result
     except Exception as e:
         logger.error(f"Task: retry_cache_post_image failed — {e}")
+        raise
+
+
+@celery_app.task(name="app.tasks.content_tasks.warmup_images_before_publish", bind=True)
+def warmup_images_before_publish(self):
+    """Pre-warm images for posts scheduled to publish within the next 30-90 minutes.
+    
+    This task runs every 30 minutes to ensure images are cached before publishing,
+    reducing the chance of Pollinations.ai failures during the actual publish process.
+    """
+    logger.info("Task: warmup_images_before_publish started")
+
+    async def _warmup():
+        async with async_session_factory() as db:
+            now = datetime.now(timezone.utc)
+            # Look for posts scheduled 30-90 minutes from now
+            window_start = now + timedelta(minutes=30)
+            window_end = now + timedelta(minutes=90)
+            
+            result = await db.execute(
+                select(Post.id, Post.image_url).where(
+                    Post.status == PostStatus.SCHEDULED,
+                    Post.scheduled_time >= window_start,
+                    Post.scheduled_time <= window_end,
+                    Post.image_url.isnot(None),
+                )
+            )
+            posts_to_warmup = result.all()
+            
+            if not posts_to_warmup:
+                logger.info("Task: warmup_images_before_publish — no posts need warming up")
+                return 0
+            
+            logger.info(f"Task: warmup_images_before_publish — warming up {len(posts_to_warmup)} posts")
+            
+            warmed_up = 0
+            for post_id, image_url in posts_to_warmup:
+                if is_cached(post_id):
+                    logger.debug(f"Post {post_id} already cached, skipping")
+                    continue
+                
+                # Use the same retry logic as publishing (3 attempts with exponential backoff)
+                meta_client = MetaClient()
+                image_bytes = await meta_client._download_image(image_url, max_retries=3)
+                
+                if image_bytes:
+                    # Cache the image locally
+                    from app.utils.image_cache import download_and_cache
+                    try:
+                        # Use the existing download_and_cache function but with pre-downloaded bytes
+                        # Since we already have the bytes, we'll save them directly
+                        from app.utils.image_cache import cached_path, _ensure_cache_dir
+                        _ensure_cache_dir()
+                        dest = cached_path(post_id)
+                        dest.write_bytes(image_bytes)
+                        warmed_up += 1
+                        logger.info(f"Warmed up image for post {post_id}")
+                    except Exception as e:
+                        logger.error(f"Failed to cache image for post {post_id}: {e}")
+                else:
+                    logger.warning(f"Failed to download image for post {post_id} after retries")
+            
+            return warmed_up
+
+    try:
+        count = run_async(_warmup())
+        logger.info(f"Task: warmup_images_before_publish completed — {count} images warmed up")
+        return {"status": "success", "warmed_up": count}
+    except Exception as e:
+        logger.error(f"Task: warmup_images_before_publish failed — {e}")
         raise

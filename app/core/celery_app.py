@@ -44,6 +44,10 @@ celery_app.conf.update(
             "task": "app.tasks.content_tasks.refresh_expiring_tokens",
             "schedule": 3600.0 * 12,  # every 12 hours
         },
+        "warmup-images-before-publish": {
+            "task": "app.tasks.content_tasks.warmup_images_before_publish",
+            "schedule": 1800.0,  # every 30 minutes
+        },
     },
 )
 
