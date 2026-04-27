@@ -56,7 +56,7 @@ def publish_scheduled_posts(self):
         logger.info(f"Task: publish_scheduled_posts completed — {count} published")
         return {"status": "success", "published": count}
     except Exception as e:
-        logger.error(f"Task: publish_scheduled_posts failed — {e}")
+        logger.error(f"Task: publish_scheduled_posts failed — {e!r}", exc_info=True)
 
 
 @celery_app.task(name="app.tasks.post_publisher.publish_single_post", bind=True, max_retries=3)
@@ -81,7 +81,7 @@ def publish_single_post(self, post_id: int):
         success = run_async(_publish())
         return {"status": "success" if success else "failed", "post_id": post_id}
     except Exception as e:
-        logger.error(f"Task: publish_single_post failed — {e}")
+        logger.error(f"Task: publish_single_post failed — {e!r}", exc_info=True)
         self.retry(countdown=60)
 
 
@@ -121,7 +121,7 @@ def retry_failed_posts(self):
         logger.info(f"Task: retry_failed_posts completed — {count} posts requeued")
         return {"status": "success", "retried": count}
     except Exception as e:
-        logger.error(f"Task: retry_failed_posts failed — {e}")
+        logger.error(f"Task: retry_failed_posts failed — {e!r}", exc_info=True)
 
 
 async def _publish_single_post(db, post: Post) -> bool:

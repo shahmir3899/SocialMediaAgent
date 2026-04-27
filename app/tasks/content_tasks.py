@@ -67,7 +67,7 @@ def generate_daily_posts(self):
         logger.info(f"Task: generate_daily_posts completed — {count} posts created")
         return {"status": "success", "posts_created": count}
     except Exception as e:
-        logger.error(f"Task: generate_daily_posts failed — {e}")
+        logger.error(f"Task: generate_daily_posts failed — {e!r}", exc_info=True)
         self.retry(countdown=60 * 5)
 
 
@@ -92,7 +92,7 @@ def schedule_posts(self):
         logger.info(f"Task: schedule_posts completed — {count} posts scheduled")
         return {"status": "success", "posts_scheduled": count}
     except Exception as e:
-        logger.error(f"Task: schedule_posts failed — {e}")
+        logger.error(f"Task: schedule_posts failed — {e!r}", exc_info=True)
         self.retry(countdown=60)
 
 
@@ -135,7 +135,7 @@ def refresh_expiring_tokens(self):
         logger.info(f"Task: refresh_expiring_tokens completed — {count} refreshed")
         return {"status": "success", "refreshed": count}
     except Exception as e:
-        logger.error(f"Task: refresh_expiring_tokens failed — {e}")
+        logger.error(f"Task: refresh_expiring_tokens failed — {e!r}", exc_info=True)
 
 
 @celery_app.task(name="app.tasks.content_tasks.backfill_image_cache")
@@ -178,7 +178,7 @@ def backfill_image_cache():
         logger.info(f"Task: backfill_image_cache completed — {count} images cached")
         return {"status": "success", "cached": count}
     except Exception as e:
-        logger.error(f"Task: backfill_image_cache failed — {e}")
+        logger.error(f"Task: backfill_image_cache failed — {e!r}", exc_info=True)
 
 
 @celery_app.task(
@@ -221,7 +221,7 @@ def retry_cache_post_image(self, post_id: int):
         )
         return result
     except Exception as e:
-        logger.error(f"Task: retry_cache_post_image failed — {e}")
+        logger.error(f"Task: retry_cache_post_image failed — {e!r}", exc_info=True)
         raise
 
 
@@ -291,5 +291,5 @@ def warmup_images_before_publish(self):
         logger.info(f"Task: warmup_images_before_publish completed — {count} images warmed up")
         return {"status": "success", "warmed_up": count}
     except Exception as e:
-        logger.error(f"Task: warmup_images_before_publish failed — {e}")
+        logger.error(f"Task: warmup_images_before_publish failed — {e!r}", exc_info=True)
         raise

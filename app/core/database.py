@@ -12,7 +12,9 @@ settings = get_settings()
 # Pooled asyncpg connections are bound to the loop that created them,
 # causing "Future attached to a different loop" on subsequent tasks.
 # NullPool avoids this by giving each session a fresh connection.
-_use_null_pool = os.environ.get("USE_NULL_POOL", "").lower() in ("1", "true")
+# Default to NullPool (safe for both FastAPI and Celery); set USE_NULL_POOL=false
+# only if you want SQLAlchemy pooling and are running FastAPI only (no Celery).
+_use_null_pool = os.environ.get("USE_NULL_POOL", "true").lower() not in ("0", "false")
 
 _pool_kwargs = (
     {"poolclass": NullPool}
