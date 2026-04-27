@@ -2,12 +2,13 @@
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.templating import Jinja2Templates
-from sqlalchemy import select, func
+from sqlalchemy import select, func, case
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.models.post import Post, PostStatus
 from app.models.account import Account
+from app.models.website_source import WebsiteSource
 
 router = APIRouter()
 templates = Jinja2Templates(directory="templates")
@@ -25,6 +26,35 @@ async def dashboard(request: Request, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Post).order_by(Post.created_at.desc()).limit(20))
     recent_posts = result.scalars().all()
 
+    source_stats_result = await db.execute(
+        select(
+            WebsiteSource.id,
+            WebsiteSource.name,
+            func.count(Post.id).label("generated"),
+            func.coalesce(
+                func.sum(case((Post.status == PostStatus.POSTED, 1), else_=0)),
+                0,
+            ).label("posted"),
+            func.coalesce(
+                func.sum(case((Post.status == PostStatus.FAILED, 1), else_=0)),
+                0,
+            ).label("failed"),
+        )
+        .outerjoin(Post, Post.website_source_id == WebsiteSource.id)
+        .group_by(WebsiteSource.id, WebsiteSource.name, WebsiteSource.priority)
+        .order_by(WebsiteSource.priority.asc(), WebsiteSource.name.asc())
+    )
+    source_stats = [
+        {
+            "id": row.id,
+            "name": row.name,
+            "generated": int(row.generated or 0),
+            "posted": int(row.posted or 0),
+            "failed": int(row.failed or 0),
+        }
+        for row in source_stats_result
+    ]
+
     return templates.TemplateResponse("pages/dashboard.html", {
         "request": request,
         "stats": {
@@ -35,6 +65,7 @@ async def dashboard(request: Request, db: AsyncSession = Depends(get_db)):
             "scheduled": scheduled,
         },
         "recent_posts": recent_posts,
+        "source_stats": source_stats,
     })
 
 

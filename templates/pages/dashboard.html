@@ -54,12 +54,45 @@
             <label for="website-source-url">Website URL</label>
             <input id="website-source-url" type="text" placeholder="https://koderkids.pk">
         </div>
+        <div class="form-group">
+            <label for="website-source-quota">Daily Mix Weight (quota)</label>
+            <input id="website-source-quota" type="number" min="1" value="1" placeholder="1">
+        </div>
     </div>
     <div class="actions">
         <button type="button" class="btn btn-primary" onclick="addWebsiteSource()">Add Website Source</button>
         <button type="button" class="btn" onclick="refreshWebsiteSources()">Refresh Source Content</button>
     </div>
     <ul id="website-source-list" style="margin-top: 12px;"></ul>
+</div>
+
+<div class="card" style="margin-top: 16px;">
+    <h3>Source Performance</h3>
+    <table>
+        <thead>
+            <tr>
+                <th>Source</th>
+                <th>Generated</th>
+                <th>Posted</th>
+                <th>Failed</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in source_stats %}
+            <tr>
+                <td>{{ row.name }}</td>
+                <td>{{ row.generated }}</td>
+                <td>{{ row.posted }}</td>
+                <td>{{ row.failed }}</td>
+            </tr>
+            {% endfor %}
+            {% if not source_stats %}
+            <tr>
+                <td colspan="4" class="text-sm text-muted" style="text-align:center;">No source stats yet.</td>
+            </tr>
+            {% endif %}
+        </tbody>
+    </table>
 </div>
 
 <div class="card" style="margin-top: 16px;">
@@ -153,12 +186,13 @@ async function dashboardLoadWebsiteSources() {
                 name: source.name,
                 base_url: source.base_url,
                 priority: source.priority,
+                daily_quota: source.daily_quota,
                 max_pages: source.max_pages,
                 notes: source.notes || '',
             }));
             li.innerHTML = `
                 <div><strong>${source.name}</strong> - ${source.base_url}${source.is_enabled ? '' : ' (disabled)'}</div>
-                <div class="text-muted">Chunks: ${source.chunk_count || 0} | Last refresh: ${crawledAt} | Status: ${status}</div>
+                <div class="text-muted">Quota: ${source.daily_quota || 1} | Chunks: ${source.chunk_count || 0} | Last refresh: ${crawledAt} | Status: ${status}</div>
                 <div class="actions" style="margin-top: 6px;">
                     <button type="button" class="btn btn-sm" onclick="refreshOneWebsiteSource(${source.id})">Refresh</button>
                     <button type="button" class="btn btn-sm" onclick="toggleWebsiteSource(${source.id}, ${source.is_enabled ? 'false' : 'true'})">${source.is_enabled ? 'Disable' : 'Enable'}</button>
@@ -176,13 +210,15 @@ async function dashboardLoadWebsiteSources() {
 async function addWebsiteSource() {
     const nameEl = document.getElementById('website-source-name');
     const urlEl = document.getElementById('website-source-url');
-    if (!nameEl || !urlEl) return;
+    const quotaEl = document.getElementById('website-source-quota');
+    if (!nameEl || !urlEl || !quotaEl) return;
 
     const payload = {
         name: (nameEl.value || '').trim(),
         base_url: (urlEl.value || '').trim(),
         is_enabled: true,
         priority: 100,
+        daily_quota: Math.max(1, Number(quotaEl.value || 1)),
         max_pages: 20,
     };
 
@@ -197,6 +233,7 @@ async function addWebsiteSource() {
             showToast('Website source added');
             nameEl.value = '';
             urlEl.value = '';
+            quotaEl.value = '1';
             await dashboardLoadWebsiteSources();
             window.dispatchEvent(new Event('website-sources-updated'));
         } else {
@@ -276,6 +313,8 @@ async function editWebsiteSource(encodedSource) {
     if (url === null) return;
     const priorityRaw = prompt('Priority (lower shows first)', String(current.priority ?? 100));
     if (priorityRaw === null) return;
+    const quotaRaw = prompt('Daily mix weight/quota (min 1)', String(current.daily_quota ?? 1));
+    if (quotaRaw === null) return;
     const maxPagesRaw = prompt('Max pages to crawl', String(current.max_pages ?? 20));
     if (maxPagesRaw === null) return;
     const notes = prompt('Notes (optional)', current.notes || '');
@@ -286,6 +325,7 @@ async function editWebsiteSource(encodedSource) {
             name: name.trim(),
             base_url: url.trim(),
             priority: Number(priorityRaw),
+            daily_quota: Math.max(1, Number(quotaRaw || 1)),
             max_pages: Number(maxPagesRaw),
             notes: notes.trim() || null,
         });

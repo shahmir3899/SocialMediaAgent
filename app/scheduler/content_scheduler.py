@@ -111,10 +111,17 @@ class ContentScheduler:
             )
             return posts
 
+        weighted_source_contexts: list[tuple[object, str]] = []
+        for source, context in source_contexts:
+            quota = max(1, int(getattr(source, "daily_quota", 1) or 1))
+            weighted_source_contexts.extend([(source, context)] * quota)
+
         source_cursor = 0
         for post_type, count in DAILY_STRATEGY.items():
             for i in range(count):
-                source, website_context = source_contexts[source_cursor % len(source_contexts)]
+                source, website_context = weighted_source_contexts[
+                    source_cursor % len(weighted_source_contexts)
+                ]
                 source_cursor += 1
                 topic = (
                     f"Create a {post_type} post grounded only in the following website content. "

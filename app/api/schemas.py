@@ -115,6 +115,7 @@ class WebsiteSourceCreate(BaseModel):
     base_url: str
     is_enabled: bool = True
     priority: int = 100
+    daily_quota: int = 1
     notes: str | None = None
     max_pages: int = 20
 
@@ -124,6 +125,7 @@ class WebsiteSourceUpdate(BaseModel):
     base_url: str | None = None
     is_enabled: bool | None = None
     priority: int | None = None
+    daily_quota: int | None = None
     notes: str | None = None
     max_pages: int | None = None
 
@@ -135,6 +137,7 @@ class WebsiteSourceResponse(BaseModel):
     is_enabled: bool
     chunk_count: int
     priority: int
+    daily_quota: int
     notes: str | None
     max_pages: int
     last_crawled_at: datetime | None

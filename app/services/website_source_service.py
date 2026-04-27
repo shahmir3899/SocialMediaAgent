@@ -42,6 +42,7 @@ class WebsiteSourceService:
             base_url=self._normalize_url(data.base_url),
             is_enabled=data.is_enabled,
             priority=data.priority,
+            daily_quota=max(1, data.daily_quota),
             notes=data.notes,
             max_pages=data.max_pages,
         )
@@ -59,6 +60,8 @@ class WebsiteSourceService:
             source.is_enabled = data.is_enabled
         if data.priority is not None:
             source.priority = data.priority
+        if data.daily_quota is not None:
+            source.daily_quota = max(1, data.daily_quota)
         if data.notes is not None:
             source.notes = data.notes
         if data.max_pages is not None:

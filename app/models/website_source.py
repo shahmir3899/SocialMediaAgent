@@ -15,6 +15,7 @@ class WebsiteSource(Base):
     base_url: Mapped[str] = mapped_column(String(1024), nullable=False, unique=True)
     is_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     priority: Mapped[int] = mapped_column(Integer, nullable=False, default=100)
+    daily_quota: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     max_pages: Mapped[int] = mapped_column(Integer, nullable=False, default=20)
     last_crawled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
