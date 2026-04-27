@@ -12,6 +12,7 @@ from app.scheduler.content_scheduler import ContentScheduler
 from app.models.account import Account
 from app.models.post import Post, PostStatus
 from app.integrations.meta_client import MetaClient
+from app.services.website_source_service import WebsiteSourceService
 from app.utils.image_cache import download_and_cache, is_cached
 
 
@@ -136,6 +137,65 @@ def refresh_expiring_tokens(self):
         return {"status": "success", "refreshed": count}
     except Exception as e:
         logger.error(f"Task: refresh_expiring_tokens failed — {e!r}", exc_info=True)
+
+
+@celery_app.task(name="app.tasks.content_tasks.refresh_website_sources", bind=True)
+def refresh_website_sources(self):
+    """Refresh all enabled website sources and persist extracted chunks."""
+    logger.info("Task: refresh_website_sources started")
+
+    async def _refresh_sources():
+        async with async_session_factory() as db:
+            try:
+                service = WebsiteSourceService(db)
+                result = await service.refresh_all_sources()
+                await db.commit()
+                return result
+            except Exception as e:
+                await db.rollback()
+                raise e
+
+    try:
+        result = run_async(_refresh_sources())
+        logger.info(
+            "Task: refresh_website_sources completed — "
+            f"refreshed={result.get('refreshed', 0)} failed={result.get('failed', 0)}"
+        )
+        return result
+    except Exception as e:
+        logger.error(f"Task: refresh_website_sources failed — {e!r}", exc_info=True)
+        self.retry(countdown=60 * 10)
+
+
+@celery_app.task(name="app.tasks.content_tasks.refresh_website_source", bind=True, max_retries=3)
+def refresh_website_source(self, source_id: int):
+    """Refresh one website source by ID."""
+    logger.info(f"Task: refresh_website_source started for source {source_id}")
+
+    async def _refresh_one():
+        async with async_session_factory() as db:
+            try:
+                service = WebsiteSourceService(db)
+                source = await service.get_source(source_id)
+                if not source:
+                    return {"status": "missing", "source_id": source_id}
+                result = await service.refresh_source(source)
+                await db.commit()
+                return result
+            except Exception as e:
+                await db.rollback()
+                raise e
+
+    try:
+        result = run_async(_refresh_one())
+        logger.info(
+            f"Task: refresh_website_source completed for source {source_id} "
+            f"status={result.get('status')}"
+        )
+        return result
+    except Exception as e:
+        logger.error(f"Task: refresh_website_source failed — {e!r}", exc_info=True)
+        self.retry(countdown=60 * 5)
 
 
 @celery_app.task(name="app.tasks.content_tasks.backfill_image_cache")

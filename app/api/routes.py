@@ -30,6 +30,7 @@ from app.api.schemas import (
 from app.services.account_service import AccountService
 from app.services.post_service import PostService
 from app.services.approval_service import ApprovalService
+from app.services.website_source_service import WebsiteSourceService
 from app.agents.content_agent import ContentAgent
 from app.integrations.meta_client import MetaClient
 from app.utils.image_cache import is_cached, cached_path, download_and_cache
@@ -96,13 +97,29 @@ async def _resolve_website_urls(db: AsyncSession, data: GeneratePostRequest) -> 
     return _normalize_urls(merged)
 
 
+async def _build_stored_website_context(db: AsyncSession, source_ids: list[int] | None) -> str:
+    """Build website context from stored extracted chunks."""
+    service = WebsiteSourceService(db)
+    if source_ids:
+        return await service.build_context_from_source_ids(source_ids)
+    return ""
+
+
 async def _compose_website_grounded_topic(
+    db: AsyncSession,
     topic: str | None,
     additional_keywords: str | None,
+    source_ids: list[int] | None,
     website_urls: list[str],
 ) -> str | None:
     """Fetch short content snippets from website URLs and compose a grounded topic."""
     base_topic = _compose_topic(topic, additional_keywords)
+    stored_context = await _build_stored_website_context(db, source_ids)
+    if stored_context:
+        if base_topic:
+            return f"{base_topic}\n\nUse only facts from this website content context:\n{stored_context}"
+        return f"Generate a post grounded in this website content context:\n{stored_context}"
+
     if not website_urls:
         return base_topic
 
@@ -287,7 +304,13 @@ async def generate_post(data: GeneratePostRequest, db: AsyncSession = Depends(ge
 
     if mode == "website":
         urls = await _resolve_website_urls(db, data)
-        topic = await _compose_website_grounded_topic(data.topic, data.additional_keywords, urls)
+        topic = await _compose_website_grounded_topic(
+            db,
+            data.topic,
+            data.additional_keywords,
+            data.website_source_ids,
+            urls,
+        )
     elif mode == "random":
         topic = _compose_topic(data.topic, data.additional_keywords)
         if not topic:
@@ -323,7 +346,13 @@ async def generate_and_save_post(
 
     if mode == "website":
         urls = await _resolve_website_urls(db, data)
-        topic = await _compose_website_grounded_topic(data.topic, data.additional_keywords, urls)
+        topic = await _compose_website_grounded_topic(
+            db,
+            data.topic,
+            data.additional_keywords,
+            data.website_source_ids,
+            urls,
+        )
     elif mode == "random" and not topic:
         pool = TOPIC_POOLS.get(data.post_type, TOPIC_POOLS.get("educational", []))
         if pool:
@@ -347,10 +376,8 @@ async def generate_and_save_post(
 @router.get("/website-sources", response_model=list[WebsiteSourceResponse])
 async def list_website_sources(db: AsyncSession = Depends(get_db)):
     """List all configured website sources."""
-    result = await db.execute(
-        select(WebsiteSource).order_by(WebsiteSource.priority.asc(), WebsiteSource.created_at.asc())
-    )
-    return list(result.scalars().all())
+    service = WebsiteSourceService(db)
+    return await service.list_sources()
 
 
 @router.post("/website-sources", response_model=WebsiteSourceResponse)
@@ -360,20 +387,11 @@ async def create_website_source(data: WebsiteSourceCreate, db: AsyncSession = De
     if not normalized:
         raise HTTPException(status_code=400, detail="Invalid base_url")
 
-    source = WebsiteSource(
-        name=data.name.strip(),
-        base_url=normalized[0],
-        is_enabled=data.is_enabled,
-        priority=data.priority,
-        notes=data.notes,
-        max_pages=data.max_pages,
-    )
-    db.add(source)
+    service = WebsiteSourceService(db)
     try:
-        await db.flush()
+        source = await service.create_source(data.model_copy(update={"base_url": normalized[0]}))
     except IntegrityError:
         raise HTTPException(status_code=409, detail="A website source with this URL already exists")
-    await db.refresh(source)
     return source
 
 
@@ -387,26 +405,11 @@ async def update_website_source(
     source = await db.get(WebsiteSource, source_id)
     if not source:
         raise HTTPException(status_code=404, detail="Website source not found")
-
-    if data.name is not None:
-        source.name = data.name.strip()
-    if data.base_url is not None:
-        normalized = _normalize_urls([data.base_url])
-        if not normalized:
-            raise HTTPException(status_code=400, detail="Invalid base_url")
-        source.base_url = normalized[0]
-    if data.is_enabled is not None:
-        source.is_enabled = data.is_enabled
-    if data.priority is not None:
-        source.priority = data.priority
-    if data.notes is not None:
-        source.notes = data.notes
-    if data.max_pages is not None:
-        source.max_pages = data.max_pages
-
-    await db.flush()
-    await db.refresh(source)
-    return source
+    service = WebsiteSourceService(db)
+    try:
+        return await service.update_source(source, data)
+    except IntegrityError:
+        raise HTTPException(status_code=409, detail="A website source with this URL already exists")
 
 
 @router.delete("/website-sources/{source_id}")
@@ -415,8 +418,27 @@ async def delete_website_source(source_id: int, db: AsyncSession = Depends(get_d
     source = await db.get(WebsiteSource, source_id)
     if not source:
         raise HTTPException(status_code=404, detail="Website source not found")
-    await db.delete(source)
+    service = WebsiteSourceService(db)
+    await service.delete_source(source)
     return {"message": "Website source deleted", "source_id": source_id}
+
+
+@router.post("/website-sources/refresh")
+async def refresh_website_sources(db: AsyncSession = Depends(get_db)):
+    """Refresh all enabled website sources and persist content chunks."""
+    service = WebsiteSourceService(db)
+    result = await service.refresh_all_sources()
+    return result
+
+
+@router.post("/website-sources/{source_id}/refresh")
+async def refresh_website_source(source_id: int, db: AsyncSession = Depends(get_db)):
+    """Refresh a single website source and persist content chunks."""
+    service = WebsiteSourceService(db)
+    source = await service.get_source(source_id)
+    if not source:
+        raise HTTPException(status_code=404, detail="Website source not found")
+    return await service.refresh_source(source)
 
 
 # ─── Post CRUD Endpoints ───

@@ -57,6 +57,7 @@
     </div>
     <div class="actions">
         <button type="button" class="btn btn-primary" onclick="addWebsiteSource()">Add Website Source</button>
+        <button type="button" class="btn" onclick="refreshWebsiteSources()">Refresh Source Content</button>
     </div>
     <ul id="website-source-list" style="margin-top: 12px;"></ul>
 </div>
@@ -182,6 +183,20 @@ async function addWebsiteSource() {
         }
     } catch (err) {
         showToast('Could not add source: ' + (err.message || 'Network error'), 'error');
+    }
+}
+
+async function refreshWebsiteSources() {
+    try {
+        const result = await apiCall('/api/website-sources/refresh', 'POST');
+        if (result && result.status === 'success') {
+            showToast(`Refreshed sources: ${result.refreshed || 0}, failed: ${result.failed || 0}`);
+            await dashboardLoadWebsiteSources();
+            return;
+        }
+        showToast('Source refresh did not complete successfully', 'error');
+    } catch (err) {
+        showToast('Could not refresh website sources: ' + (err.message || 'Network error'), 'error');
     }
 }
 
