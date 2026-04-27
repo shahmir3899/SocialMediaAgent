@@ -25,6 +25,14 @@ class WebsiteSourceService:
         )
         return list(result.scalars().all())
 
+    async def list_enabled_sources(self) -> list[WebsiteSource]:
+        result = await self.db.execute(
+            select(WebsiteSource)
+            .where(WebsiteSource.is_enabled.is_(True))
+            .order_by(WebsiteSource.priority.asc(), WebsiteSource.created_at.asc())
+        )
+        return list(result.scalars().all())
+
     async def get_source(self, source_id: int) -> WebsiteSource | None:
         return await self.db.get(WebsiteSource, source_id)
 
@@ -124,6 +132,9 @@ class WebsiteSourceService:
                 f"Source {source.name} ({chunk.page_url}) | {chunk.content[:700]}"
             )
         return "\n".join(snippets)
+
+    async def build_context_for_source(self, source_id: int, limit: int = 4) -> str:
+        return await self.build_context_from_source_ids([source_id], limit=limit)
 
     async def build_context_from_enabled_sources(self, limit: int = 8) -> str:
         result = await self.db.execute(

@@ -143,8 +143,17 @@ async function dashboardLoadWebsiteSources() {
         sources.forEach((source) => {
             const li = document.createElement('li');
             li.className = 'text-sm';
-            li.style.marginBottom = '6px';
-            li.textContent = `${source.name} - ${source.base_url}${source.is_enabled ? '' : ' (disabled)'}`;
+            li.style.marginBottom = '10px';
+            const crawledAt = source.last_crawled_at ? new Date(source.last_crawled_at).toLocaleString() : 'Never';
+            const status = source.last_status || 'not_refreshed';
+            li.innerHTML = `
+                <div><strong>${source.name}</strong> - ${source.base_url}${source.is_enabled ? '' : ' (disabled)'}</div>
+                <div class="text-muted">Chunks: ${source.chunk_count || 0} | Last refresh: ${crawledAt} | Status: ${status}</div>
+                <div class="actions" style="margin-top: 6px;">
+                    <button type="button" class="btn btn-sm" onclick="refreshOneWebsiteSource(${source.id})">Refresh</button>
+                    <button type="button" class="btn btn-sm" onclick="deleteWebsiteSource(${source.id})">Delete</button>
+                </div>
+            `;
             listEl.appendChild(li);
         });
     } catch (err) {
@@ -177,7 +186,7 @@ async function addWebsiteSource() {
             nameEl.value = '';
             urlEl.value = '';
             await dashboardLoadWebsiteSources();
-            location.reload();
+            window.dispatchEvent(new Event('website-sources-updated'));
         } else {
             showToast('Could not add source', 'error');
         }
@@ -192,11 +201,43 @@ async function refreshWebsiteSources() {
         if (result && result.status === 'success') {
             showToast(`Refreshed sources: ${result.refreshed || 0}, failed: ${result.failed || 0}`);
             await dashboardLoadWebsiteSources();
+            window.dispatchEvent(new Event('website-sources-updated'));
             return;
         }
         showToast('Source refresh did not complete successfully', 'error');
     } catch (err) {
         showToast('Could not refresh website sources: ' + (err.message || 'Network error'), 'error');
+    }
+}
+
+async function refreshOneWebsiteSource(sourceId) {
+    try {
+        const result = await apiCall(`/api/website-sources/${sourceId}/refresh`, 'POST');
+        if (result && result.status === 'success') {
+            showToast(`Source refreshed: ${result.chunks || 0} chunks`);
+            await dashboardLoadWebsiteSources();
+            window.dispatchEvent(new Event('website-sources-updated'));
+            return;
+        }
+        showToast('Source refresh failed', 'error');
+    } catch (err) {
+        showToast('Could not refresh source: ' + (err.message || 'Network error'), 'error');
+    }
+}
+
+async function deleteWebsiteSource(sourceId) {
+    if (!confirm('Delete this website source and its stored content?')) return;
+    try {
+        const result = await apiCall(`/api/website-sources/${sourceId}`, 'DELETE');
+        if (result && result.source_id) {
+            showToast('Website source deleted');
+            await dashboardLoadWebsiteSources();
+            window.dispatchEvent(new Event('website-sources-updated'));
+            return;
+        }
+        showToast('Could not delete source', 'error');
+    } catch (err) {
+        showToast('Could not delete source: ' + (err.message || 'Network error'), 'error');
     }
 }
 

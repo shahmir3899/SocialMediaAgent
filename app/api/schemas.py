@@ -131,6 +131,7 @@ class WebsiteSourceResponse(BaseModel):
     name: str
     base_url: str
     is_enabled: bool
+    chunk_count: int
     priority: int
     notes: str | None
     max_pages: int

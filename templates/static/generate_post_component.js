@@ -191,6 +191,10 @@ function initGeneratePostComposer(rootId, options = {}) {
         generationModeEl.addEventListener("change", renderMode);
     }
 
+    window.addEventListener("website-sources-updated", () => {
+        loadWebsiteSources(websiteSourceIdsEl);
+    });
+
     generateBtn.addEventListener("click", async () => {
         const payload = {
             post_type: postTypeEl.value,

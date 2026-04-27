@@ -36,6 +36,10 @@ class WebsiteSource(Base):
     def __repr__(self) -> str:
         return f"<WebsiteSource {self.id}:{self.name}>"
 
+    @property
+    def chunk_count(self) -> int:
+        return len(self.chunks or [])
+
 
 class WebsiteContentChunk(Base):
     __tablename__ = "website_content_chunks"

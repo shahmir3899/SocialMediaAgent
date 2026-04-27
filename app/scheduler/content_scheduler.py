@@ -88,12 +88,6 @@ class ContentScheduler:
         self.image_agent = ImageAgent()
         self.workflow = WorkflowEngine()
 
-    async def _build_website_context(self) -> str | None:
-        """Build website context from persisted extracted content chunks."""
-        service = WebsiteSourceService(self.db)
-        context = await service.build_context_from_enabled_sources()
-        return context or None
-
     async def generate_daily_posts(self, platform: str = "facebook") -> list[Post]:
         """Generate the full set of daily posts according to strategy.
 
@@ -102,19 +96,30 @@ class ContentScheduler:
         """
         logger.info("Starting daily post generation")
         posts = []
+        service = WebsiteSourceService(self.db)
+        enabled_sources = await service.list_enabled_sources()
+        source_contexts: list[tuple[object, str]] = []
 
-        website_context = await self._build_website_context()
-        if not website_context:
+        for source in enabled_sources:
+            context = await service.build_context_for_source(source.id)
+            if context:
+                source_contexts.append((source, context))
+
+        if not source_contexts:
             logger.warning(
                 "Daily generation skipped: no enabled website source content available"
             )
             return posts
 
+        source_cursor = 0
         for post_type, count in DAILY_STRATEGY.items():
             for i in range(count):
+                source, website_context = source_contexts[source_cursor % len(source_contexts)]
+                source_cursor += 1
                 topic = (
                     f"Create a {post_type} post grounded only in the following website content. "
-                    f"Angle #{i + 1} should be meaningfully different from other posts.\\n\\n"
+                    f"Angle #{i + 1} should be meaningfully different from other posts. "
+                    f"Center the post on this source: {source.name} ({source.base_url}).\\n\\n"
                     f"{website_context}"
                 )
                 try:
@@ -126,7 +131,7 @@ class ContentScheduler:
                     post = await self._save_generated_post(generated, platform)
                     posts.append(post)
                     logger.info(
-                        f"Generated website-grounded {post_type} post {i+1}/{count}"
+                        f"Generated website-grounded {post_type} post {i+1}/{count} for source={source.name}"
                     )
                 except Exception as e:
                     logger.error(f"Failed to generate {post_type} post: {e}")
