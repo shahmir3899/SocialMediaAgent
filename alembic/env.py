@@ -6,7 +6,14 @@ from alembic import context
 
 from app.core.config import get_settings
 from app.core.database import Base
-from app.models import Account, Post, PostLog, ApprovalQueue  # noqa: F401
+from app.models import (  # noqa: F401
+    Account,
+    Post,
+    PostLog,
+    ApprovalQueue,
+    WebsiteSource,
+    WebsiteContentChunk,
+)
 
 config = context.config
 settings = get_settings()

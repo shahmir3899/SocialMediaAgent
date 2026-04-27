@@ -103,14 +103,58 @@ function getErrorMessage(result) {
     return "Unknown error";
 }
 
+function parseWebsiteUrls(raw) {
+    if (!raw) return [];
+    return raw
+        .split(/[\n,]/)
+        .map((v) => v.trim())
+        .filter((v) => !!v);
+}
+
+async function loadWebsiteSources(selectEl) {
+    if (!selectEl) return;
+    try {
+        const result = await apiCall("/api/website-sources", "GET");
+        const sources = Array.isArray(result) ? result : [];
+        selectEl.innerHTML = "";
+        if (!sources.length) {
+            const opt = document.createElement("option");
+            opt.value = "";
+            opt.textContent = "No saved website sources yet";
+            opt.disabled = true;
+            selectEl.appendChild(opt);
+            return;
+        }
+        sources.forEach((source) => {
+            const opt = document.createElement("option");
+            opt.value = String(source.id);
+            opt.textContent = `${source.name} (${source.base_url})`;
+            selectEl.appendChild(opt);
+        });
+    } catch (_) {
+        selectEl.innerHTML = "";
+    }
+}
+
+function selectedSourceIds(selectEl) {
+    if (!selectEl) return [];
+    return Array.from(selectEl.selectedOptions)
+        .map((opt) => Number(opt.value))
+        .filter((id) => Number.isInteger(id) && id > 0);
+}
+
 function initGeneratePostComposer(rootId, options = {}) {
     const root = document.getElementById(rootId);
     if (!root) return;
 
     const postTypeEl = root.querySelector('[data-role="post-type"]');
+    const generationModeEl = root.querySelector('[data-role="generation-mode"]');
     const platformEl = root.querySelector('[data-role="platform"]');
     const topicEl = root.querySelector('[data-role="topic"]');
     const keywordsEl = root.querySelector('[data-role="keywords"]');
+    const websiteUrlsGroupEl = root.querySelector('[data-role="website-urls-group"]');
+    const websiteUrlsEl = root.querySelector('[data-role="website-urls"]');
+    const websiteSourceIdsEl = root.querySelector('[data-role="website-source-ids"]');
     const presetListEl = root.querySelector('[data-role="preset-list"]');
     const generateBtn = root.querySelector('[data-role="generate-btn"]');
     const resultEl = root.querySelector('[data-role="result"]');
@@ -120,22 +164,42 @@ function initGeneratePostComposer(rootId, options = {}) {
     function renderPresets() {
         const selectedType = postTypeEl.value;
         const list = presets[selectedType] || [];
+        const mode = generationModeEl ? generationModeEl.value : "direct_topic";
+        if (mode !== "random") {
+            presetListEl.innerHTML = "<p class='text-sm text-muted'>Quick presets are available in Random mode.</p>";
+            return;
+        }
         buildPresetChips(presetListEl, list, (text, chip) => {
             topicEl.value = text;
             markSelectedChip(presetListEl, chip);
         });
     }
 
+    function renderMode() {
+        const mode = generationModeEl ? generationModeEl.value : "direct_topic";
+        if (websiteUrlsGroupEl) {
+            websiteUrlsGroupEl.style.display = mode === "website" ? "block" : "none";
+        }
+        renderPresets();
+    }
+
     postTypeEl.addEventListener("change", () => {
         renderPresets();
     });
+
+    if (generationModeEl) {
+        generationModeEl.addEventListener("change", renderMode);
+    }
 
     generateBtn.addEventListener("click", async () => {
         const payload = {
             post_type: postTypeEl.value,
             platform: platformEl.value,
             topic: topicEl.value.trim() || null,
-            additional_keywords: keywordsEl.value.trim() || null
+            additional_keywords: keywordsEl.value.trim() || null,
+            generation_mode: generationModeEl ? generationModeEl.value : "direct_topic",
+            website_urls: websiteUrlsEl ? parseWebsiteUrls(websiteUrlsEl.value) : [],
+            website_source_ids: selectedSourceIds(websiteSourceIdsEl)
         };
 
         const label = generateBtn.querySelector(".btn-label");
@@ -165,7 +229,8 @@ function initGeneratePostComposer(rootId, options = {}) {
         }
     });
 
-    renderPresets();
+    renderMode();
+    loadWebsiteSources(websiteSourceIdsEl);
 }
 
 window.initGeneratePostComposer = initGeneratePostComposer;

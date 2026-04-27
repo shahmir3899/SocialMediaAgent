@@ -1,12 +1,15 @@
 """API route definitions."""
 
+import re
 import secrets
 from datetime import datetime, timezone, timedelta
 from urllib.parse import urlencode
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import RedirectResponse, HTMLResponse, FileResponse
+import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.exc import IntegrityError
 
 from app.core.config import get_settings
 from app.core.database import get_db
@@ -15,12 +18,14 @@ from app.models.account import Account, Platform
 from app.models.post import Post, PostStatus, PostMode, PostType
 from app.models.post_log import PostLog
 from app.models.approval import ApprovalQueue, ApprovalStatus
+from app.models.website_source import WebsiteSource
 from app.api.schemas import (
     AccountConnect, AccountResponse,
     PostCreate, PostEdit, PostResponse,
     ApprovalAction, ApprovalResponse,
     GeneratePostRequest, GeneratedPostResponse,
     PostLogResponse,
+    WebsiteSourceCreate, WebsiteSourceUpdate, WebsiteSourceResponse,
 )
 from app.services.account_service import AccountService
 from app.services.post_service import PostService
@@ -45,6 +50,81 @@ def _compose_topic(topic: str | None, additional_keywords: str | None) -> str | 
     if clean_keywords:
         return f"Focus on these keywords: {clean_keywords}"
     return None
+
+
+def _normalize_urls(urls: list[str] | None) -> list[str]:
+    """Normalize and deduplicate URLs from request input."""
+    if not urls:
+        return []
+    cleaned: list[str] = []
+    seen: set[str] = set()
+    for raw in urls:
+        if not raw:
+            continue
+        url = raw.strip()
+        if not url:
+            continue
+        if not url.startswith(("http://", "https://")):
+            url = f"https://{url}"
+        if url not in seen:
+            cleaned.append(url)
+            seen.add(url)
+    return cleaned
+
+
+def _extract_text_from_html(html: str) -> str:
+    """Extract a compact plain-text summary from raw HTML."""
+    if not html:
+        return ""
+    no_script = re.sub(r"<script[\\s\\S]*?</script>", " ", html, flags=re.IGNORECASE)
+    no_style = re.sub(r"<style[\\s\\S]*?</style>", " ", no_script, flags=re.IGNORECASE)
+    text = re.sub(r"<[^>]+>", " ", no_style)
+    text = re.sub(r"\\s+", " ", text).strip()
+    return text[:1200]
+
+
+async def _resolve_website_urls(db: AsyncSession, data: GeneratePostRequest) -> list[str]:
+    """Merge explicit URLs with selected website source IDs."""
+    urls = _normalize_urls(data.website_urls)
+    ids = data.website_source_ids or []
+    if not ids:
+        return urls
+
+    result = await db.execute(select(WebsiteSource).where(WebsiteSource.id.in_(ids)))
+    sources = list(result.scalars().all())
+    merged = urls + [s.base_url for s in sources if s.base_url]
+    return _normalize_urls(merged)
+
+
+async def _compose_website_grounded_topic(
+    topic: str | None,
+    additional_keywords: str | None,
+    website_urls: list[str],
+) -> str | None:
+    """Fetch short content snippets from website URLs and compose a grounded topic."""
+    base_topic = _compose_topic(topic, additional_keywords)
+    if not website_urls:
+        return base_topic
+
+    snippets: list[str] = []
+    async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
+        for url in website_urls[:2]:  # Keep request latency bounded for interactive generation
+            try:
+                res = await client.get(url)
+                res.raise_for_status()
+                extracted = _extract_text_from_html(res.text)
+                if extracted:
+                    snippets.append(f"Source: {url} | {extracted}")
+            except Exception as e:
+                logger.warning(f"Could not fetch website source '{url}': {e}")
+
+    if not snippets:
+        return base_topic
+
+    source_context = "\\n".join(snippets)
+    if base_topic:
+        return f"{base_topic}\\n\\nUse only facts from this website content context:\\n{source_context}"
+    return f"Generate a post grounded in this website content context:\\n{source_context}"
 
 
 # ─── Account Endpoints ───
@@ -199,11 +279,28 @@ async def meta_oauth_callback(
 # ─── Post Generation Endpoints ───
 
 @router.post("/posts/generate", response_model=GeneratedPostResponse)
-async def generate_post(data: GeneratePostRequest):
+async def generate_post(data: GeneratePostRequest, db: AsyncSession = Depends(get_db)):
     """Generate a post using AI."""
     logger.info(f"Generating {data.post_type} post for {data.platform}")
     agent = ContentAgent()
-    topic = _compose_topic(data.topic, data.additional_keywords)
+    mode = (data.generation_mode or "direct_topic").strip().lower()
+
+    if mode == "website":
+        urls = await _resolve_website_urls(db, data)
+        topic = await _compose_website_grounded_topic(data.topic, data.additional_keywords, urls)
+    elif mode == "random":
+        topic = _compose_topic(data.topic, data.additional_keywords)
+        if not topic:
+            from app.scheduler.content_scheduler import TOPIC_POOLS
+
+            pool = TOPIC_POOLS.get(data.post_type, TOPIC_POOLS.get("educational", []))
+            if pool:
+                import random
+
+                topic = random.choice(pool)
+    else:
+        topic = _compose_topic(data.topic, data.additional_keywords)
+
     result = await agent.generate_post(
         post_type=data.post_type,
         platform=data.platform,
@@ -221,8 +318,13 @@ async def generate_and_save_post(
     import random
     from app.scheduler.content_scheduler import TOPIC_POOLS
 
+    mode = (data.generation_mode or "direct_topic").strip().lower()
     topic = _compose_topic(data.topic, data.additional_keywords)
-    if not topic:
+
+    if mode == "website":
+        urls = await _resolve_website_urls(db, data)
+        topic = await _compose_website_grounded_topic(data.topic, data.additional_keywords, urls)
+    elif mode == "random" and not topic:
         pool = TOPIC_POOLS.get(data.post_type, TOPIC_POOLS.get("educational", []))
         if pool:
             topic = random.choice(pool)
@@ -238,6 +340,83 @@ async def generate_and_save_post(
     service = PostService(db)
     post = await service.create_post_from_generated(generated, data)
     return post
+
+
+# ─── Website Source Endpoints ───
+
+@router.get("/website-sources", response_model=list[WebsiteSourceResponse])
+async def list_website_sources(db: AsyncSession = Depends(get_db)):
+    """List all configured website sources."""
+    result = await db.execute(
+        select(WebsiteSource).order_by(WebsiteSource.priority.asc(), WebsiteSource.created_at.asc())
+    )
+    return list(result.scalars().all())
+
+
+@router.post("/website-sources", response_model=WebsiteSourceResponse)
+async def create_website_source(data: WebsiteSourceCreate, db: AsyncSession = Depends(get_db)):
+    """Create a website source for grounded content generation."""
+    normalized = _normalize_urls([data.base_url])
+    if not normalized:
+        raise HTTPException(status_code=400, detail="Invalid base_url")
+
+    source = WebsiteSource(
+        name=data.name.strip(),
+        base_url=normalized[0],
+        is_enabled=data.is_enabled,
+        priority=data.priority,
+        notes=data.notes,
+        max_pages=data.max_pages,
+    )
+    db.add(source)
+    try:
+        await db.flush()
+    except IntegrityError:
+        raise HTTPException(status_code=409, detail="A website source with this URL already exists")
+    await db.refresh(source)
+    return source
+
+
+@router.put("/website-sources/{source_id}", response_model=WebsiteSourceResponse)
+async def update_website_source(
+    source_id: int,
+    data: WebsiteSourceUpdate,
+    db: AsyncSession = Depends(get_db),
+):
+    """Update website source configuration."""
+    source = await db.get(WebsiteSource, source_id)
+    if not source:
+        raise HTTPException(status_code=404, detail="Website source not found")
+
+    if data.name is not None:
+        source.name = data.name.strip()
+    if data.base_url is not None:
+        normalized = _normalize_urls([data.base_url])
+        if not normalized:
+            raise HTTPException(status_code=400, detail="Invalid base_url")
+        source.base_url = normalized[0]
+    if data.is_enabled is not None:
+        source.is_enabled = data.is_enabled
+    if data.priority is not None:
+        source.priority = data.priority
+    if data.notes is not None:
+        source.notes = data.notes
+    if data.max_pages is not None:
+        source.max_pages = data.max_pages
+
+    await db.flush()
+    await db.refresh(source)
+    return source
+
+
+@router.delete("/website-sources/{source_id}")
+async def delete_website_source(source_id: int, db: AsyncSession = Depends(get_db)):
+    """Delete a website source."""
+    source = await db.get(WebsiteSource, source_id)
+    if not source:
+        raise HTTPException(status_code=404, detail="Website source not found")
+    await db.delete(source)
+    return {"message": "Website source deleted", "source_id": source_id}
 
 
 # ─── Post CRUD Endpoints ───

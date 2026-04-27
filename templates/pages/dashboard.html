@@ -44,6 +44,24 @@
 {% include "components/generate_post_composer.html" %}
 
 <div class="card" style="margin-top: 16px;">
+    <h3>Website Sources</h3>
+    <div class="grid grid-2" style="margin-top: 12px;">
+        <div class="form-group">
+            <label for="website-source-name">Source Name</label>
+            <input id="website-source-name" type="text" placeholder="Koder Kids Main Site">
+        </div>
+        <div class="form-group">
+            <label for="website-source-url">Website URL</label>
+            <input id="website-source-url" type="text" placeholder="https://koderkids.pk">
+        </div>
+    </div>
+    <div class="actions">
+        <button type="button" class="btn btn-primary" onclick="addWebsiteSource()">Add Website Source</button>
+    </div>
+    <ul id="website-source-list" style="margin-top: 12px;"></ul>
+</div>
+
+<div class="card" style="margin-top: 16px;">
     <h3>Recent Posts</h3>
     <table>
         <thead>
@@ -110,6 +128,64 @@
 {% block scripts %}
 <script>
 initGeneratePostComposer('dashboard-generate-composer');
+
+async function dashboardLoadWebsiteSources() {
+    const listEl = document.getElementById('website-source-list');
+    if (!listEl) return;
+    listEl.innerHTML = '';
+    try {
+        const sources = await apiCall('/api/website-sources', 'GET');
+        if (!Array.isArray(sources) || !sources.length) {
+            listEl.innerHTML = '<li class="text-sm text-muted">No sources saved yet.</li>';
+            return;
+        }
+        sources.forEach((source) => {
+            const li = document.createElement('li');
+            li.className = 'text-sm';
+            li.style.marginBottom = '6px';
+            li.textContent = `${source.name} - ${source.base_url}${source.is_enabled ? '' : ' (disabled)'}`;
+            listEl.appendChild(li);
+        });
+    } catch (err) {
+        listEl.innerHTML = '<li class="text-sm text-muted">Could not load sources.</li>';
+    }
+}
+
+async function addWebsiteSource() {
+    const nameEl = document.getElementById('website-source-name');
+    const urlEl = document.getElementById('website-source-url');
+    if (!nameEl || !urlEl) return;
+
+    const payload = {
+        name: (nameEl.value || '').trim(),
+        base_url: (urlEl.value || '').trim(),
+        is_enabled: true,
+        priority: 100,
+        max_pages: 20,
+    };
+
+    if (!payload.name || !payload.base_url) {
+        showToast('Name and URL are required', 'error');
+        return;
+    }
+
+    try {
+        const result = await apiCall('/api/website-sources', 'POST', payload);
+        if (result && result.id) {
+            showToast('Website source added');
+            nameEl.value = '';
+            urlEl.value = '';
+            await dashboardLoadWebsiteSources();
+            location.reload();
+        } else {
+            showToast('Could not add source', 'error');
+        }
+    } catch (err) {
+        showToast('Could not add source: ' + (err.message || 'Network error'), 'error');
+    }
+}
+
+dashboardLoadWebsiteSources();
 
 async function publishNow(postId) {
     if (!confirm('Publish this post to Facebook/Instagram now?')) return;

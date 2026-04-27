@@ -6,6 +6,14 @@
 
     <div class="grid grid-2 composer-grid" style="margin-top: 12px;">
         <div class="form-group">
+            <label for="{{ composer_id }}-mode">Generation Mode</label>
+            <select id="{{ composer_id }}-mode" data-role="generation-mode">
+                <option value="direct_topic">Custom Topic</option>
+                <option value="website">Website Grounded</option>
+                <option value="random">Random Topic</option>
+            </select>
+        </div>
+        <div class="form-group">
             <label for="{{ composer_id }}-platform">Platform</label>
             <select id="{{ composer_id }}-platform" data-role="platform">
                 <option value="facebook">Facebook</option>
@@ -27,6 +35,15 @@
     <div class="form-group">
         <label>Quick Topic Ideas</label>
         <div class="chip-list" data-role="preset-list"></div>
+    </div>
+
+    <div class="form-group" data-role="website-urls-group" style="display: none;">
+        <label for="{{ composer_id }}-website-sources">Saved Website Sources</label>
+        <select id="{{ composer_id }}-website-sources" data-role="website-source-ids" multiple size="4"></select>
+        <p class="text-sm text-muted">Select one or more saved sources, or add ad-hoc URLs below.</p>
+
+        <label for="{{ composer_id }}-website-urls">Website URLs (one per line)</label>
+        <textarea id="{{ composer_id }}-website-urls" data-role="website-urls" rows="3" placeholder="https://koderkids.pk&#10;https://kodereduai.pk"></textarea>
     </div>
 
     <div class="form-group">

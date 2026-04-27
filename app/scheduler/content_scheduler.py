@@ -1,7 +1,8 @@
 """Content scheduling service for daily post generation and scheduling."""
 
-import random
+import re
 from datetime import datetime, timedelta, timezone
+import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -9,6 +10,7 @@ from app.core.logging import logger
 from app.core.config import get_settings
 from app.models.post import Post, PostStatus, PostMode, PostType
 from app.models.approval import ApprovalQueue, ApprovalStatus
+from app.models.website_source import WebsiteSource
 from app.agents.content_agent import ContentAgent
 from app.agents.image_agent import ImageAgent
 from app.services.workflow_engine import WorkflowEngine
@@ -88,20 +90,67 @@ class ContentScheduler:
         self.image_agent = ImageAgent()
         self.workflow = WorkflowEngine()
 
+    @staticmethod
+    def _extract_text_from_html(html: str) -> str:
+        """Extract a compact summary text from raw HTML."""
+        if not html:
+            return ""
+        no_script = re.sub(r"<script[\\s\\S]*?</script>", " ", html, flags=re.IGNORECASE)
+        no_style = re.sub(r"<style[\\s\\S]*?</style>", " ", no_script, flags=re.IGNORECASE)
+        text = re.sub(r"<[^>]+>", " ", no_style)
+        text = re.sub(r"\\s+", " ", text).strip()
+        return text[:1500]
+
+    async def _build_website_context(self) -> str | None:
+        """Fetch a short context from enabled website sources for grounded autogeneration."""
+        result = await self.db.execute(
+            select(WebsiteSource)
+            .where(WebsiteSource.is_enabled.is_(True))
+            .order_by(WebsiteSource.priority.asc(), WebsiteSource.created_at.asc())
+        )
+        sources = list(result.scalars().all())
+        if not sources:
+            return None
+
+        snippets: list[str] = []
+        async with httpx.AsyncClient(timeout=20.0, follow_redirects=True) as client:
+            for source in sources[:2]:
+                try:
+                    res = await client.get(source.base_url)
+                    res.raise_for_status()
+                    extracted = self._extract_text_from_html(res.text)
+                    if extracted:
+                        snippets.append(f"Source {source.name} ({source.base_url}): {extracted}")
+                except Exception as e:
+                    logger.warning(f"Source fetch failed for {source.base_url}: {e}")
+
+        if not snippets:
+            return None
+        return "\\n".join(snippets)
+
     async def generate_daily_posts(self, platform: str = "facebook") -> list[Post]:
-        """Generate the full set of daily posts according to strategy."""
+        """Generate the full set of daily posts according to strategy.
+
+        Auto-generation is website-grounded only. If no website sources are
+        available, generation is skipped to avoid random unattended posts.
+        """
         logger.info("Starting daily post generation")
         posts = []
 
-        for post_type, count in DAILY_STRATEGY.items():
-            # Pick random unique topics for this post type
-            pool = TOPIC_POOLS.get(post_type, [])
-            topics = random.sample(pool, min(count, len(pool))) if pool else [None] * count
-            # Pad with None if pool is smaller than count
-            while len(topics) < count:
-                topics.append(None)
+        website_context = await self._build_website_context()
+        if not website_context:
+            logger.warning(
+                "Daily generation skipped: no enabled website source content available"
+            )
+            return posts
 
-            for i, topic in enumerate(topics):
+        for post_type, count in DAILY_STRATEGY.items():
+            for i in range(count):
+                topic = (
+                    f"Create a {post_type} post grounded only in the following website content. "
+                    f"Angle #{i + 1} should be meaningfully different from other posts.\\n\\n"
+                    f"{website_context}"
+                )
                 try:
                     generated = await self.agent.generate_post(
                         post_type=post_type,
@@ -110,7 +159,9 @@ class ContentScheduler:
                     )
                     post = await self._save_generated_post(generated, platform)
                     posts.append(post)
-                    logger.info(f"Generated {post_type} post {i+1}/{count} topic='{topic}'")
+                    logger.info(
+                        f"Generated website-grounded {post_type} post {i+1}/{count}"
+                    )
                 except Exception as e:
                     logger.error(f"Failed to generate {post_type} post: {e}")
 

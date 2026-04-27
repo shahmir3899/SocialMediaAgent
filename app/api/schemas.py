@@ -82,6 +82,9 @@ class GeneratePostRequest(BaseModel):
     topic: str | None = None
     additional_keywords: str | None = None
     account_id: int | None = None
+    generation_mode: str = "direct_topic"  # direct_topic | website | random
+    website_source_ids: list[int] | None = None
+    website_urls: list[str] | None = None
 
 
 class GeneratedPostResponse(BaseModel):
@@ -99,5 +102,41 @@ class PostLogResponse(BaseModel):
     platform_response: str | None
     posted_at: datetime
     success: bool
+
+    model_config = {"from_attributes": True}
+
+
+# ─── Website Source Schemas ───
+
+class WebsiteSourceCreate(BaseModel):
+    name: str
+    base_url: str
+    is_enabled: bool = True
+    priority: int = 100
+    notes: str | None = None
+    max_pages: int = 20
+
+
+class WebsiteSourceUpdate(BaseModel):
+    name: str | None = None
+    base_url: str | None = None
+    is_enabled: bool | None = None
+    priority: int | None = None
+    notes: str | None = None
+    max_pages: int | None = None
+
+
+class WebsiteSourceResponse(BaseModel):
+    id: int
+    name: str
+    base_url: str
+    is_enabled: bool
+    priority: int
+    notes: str | None
+    max_pages: int
+    last_crawled_at: datetime | None
+    last_status: str | None
+    created_at: datetime
+    updated_at: datetime
 
     model_config = {"from_attributes": True}
