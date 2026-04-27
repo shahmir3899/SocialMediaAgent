@@ -71,6 +71,7 @@
                 <th>Image</th>
                 <th>Content</th>
                 <th>Platform</th>
+                <th>Source</th>
                 <th>Type</th>
                 <th>Mode</th>
                 <th>Status</th>
@@ -93,6 +94,7 @@
                 </td>
                 <td><div class="post-content">{{ post.content[:80] }}{% if post.content|length > 80 %}...{% endif %}</div></td>
                 <td>{{ post.platform }}</td>
+                <td>{{ post.website_source.name if post.website_source else '-' }}</td>
                 <td>{{ post.post_type.value if post.post_type else '-' }}</td>
                 <td><span class="badge badge-{{ post.mode.value if post.mode else 'auto' }}">{{ post.mode.value if post.mode else '-' }}</span></td>
                 <td>
@@ -119,7 +121,7 @@
             </tr>
             {% endfor %}
             {% if not recent_posts %}
-            <tr><td colspan="9" class="text-muted text-sm" style="text-align: center;">No posts yet</td></tr>
+            <tr><td colspan="10" class="text-muted text-sm" style="text-align: center;">No posts yet</td></tr>
             {% endif %}
         </tbody>
     </table>
@@ -146,11 +148,21 @@ async function dashboardLoadWebsiteSources() {
             li.style.marginBottom = '10px';
             const crawledAt = source.last_crawled_at ? new Date(source.last_crawled_at).toLocaleString() : 'Never';
             const status = source.last_status || 'not_refreshed';
+            const editPayload = encodeURIComponent(JSON.stringify({
+                id: source.id,
+                name: source.name,
+                base_url: source.base_url,
+                priority: source.priority,
+                max_pages: source.max_pages,
+                notes: source.notes || '',
+            }));
             li.innerHTML = `
                 <div><strong>${source.name}</strong> - ${source.base_url}${source.is_enabled ? '' : ' (disabled)'}</div>
                 <div class="text-muted">Chunks: ${source.chunk_count || 0} | Last refresh: ${crawledAt} | Status: ${status}</div>
                 <div class="actions" style="margin-top: 6px;">
                     <button type="button" class="btn btn-sm" onclick="refreshOneWebsiteSource(${source.id})">Refresh</button>
+                    <button type="button" class="btn btn-sm" onclick="toggleWebsiteSource(${source.id}, ${source.is_enabled ? 'false' : 'true'})">${source.is_enabled ? 'Disable' : 'Enable'}</button>
+                    <button type="button" class="btn btn-sm" onclick="editWebsiteSource('${editPayload}')">Edit</button>
                     <button type="button" class="btn btn-sm" onclick="deleteWebsiteSource(${source.id})">Delete</button>
                 </div>
             `;
@@ -238,6 +250,54 @@ async function deleteWebsiteSource(sourceId) {
         showToast('Could not delete source', 'error');
     } catch (err) {
         showToast('Could not delete source: ' + (err.message || 'Network error'), 'error');
+    }
+}
+
+async function toggleWebsiteSource(sourceId, shouldEnable) {
+    try {
+        const result = await apiCall(`/api/website-sources/${sourceId}`, 'PUT', { is_enabled: shouldEnable });
+        if (result && result.id) {
+            showToast(`Website source ${shouldEnable ? 'enabled' : 'disabled'}`);
+            await dashboardLoadWebsiteSources();
+            window.dispatchEvent(new Event('website-sources-updated'));
+            return;
+        }
+        showToast('Could not update source', 'error');
+    } catch (err) {
+        showToast('Could not update source: ' + (err.message || 'Network error'), 'error');
+    }
+}
+
+async function editWebsiteSource(encodedSource) {
+    const current = JSON.parse(decodeURIComponent(encodedSource));
+    const name = prompt('Source name', current.name || '');
+    if (name === null) return;
+    const url = prompt('Base URL', current.base_url || '');
+    if (url === null) return;
+    const priorityRaw = prompt('Priority (lower shows first)', String(current.priority ?? 100));
+    if (priorityRaw === null) return;
+    const maxPagesRaw = prompt('Max pages to crawl', String(current.max_pages ?? 20));
+    if (maxPagesRaw === null) return;
+    const notes = prompt('Notes (optional)', current.notes || '');
+    if (notes === null) return;
+
+    try {
+        const result = await apiCall(`/api/website-sources/${current.id}`, 'PUT', {
+            name: name.trim(),
+            base_url: url.trim(),
+            priority: Number(priorityRaw),
+            max_pages: Number(maxPagesRaw),
+            notes: notes.trim() || null,
+        });
+        if (result && result.id) {
+            showToast('Website source updated');
+            await dashboardLoadWebsiteSources();
+            window.dispatchEvent(new Event('website-sources-updated'));
+            return;
+        }
+        showToast('Could not update source', 'error');
+    } catch (err) {
+        showToast('Could not update source: ' + (err.message || 'Network error'), 'error');
     }
 }
 

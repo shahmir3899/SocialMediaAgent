@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.logging import logger
 from app.models.post import Post, PostStatus, PostMode, PostType
 from app.models.approval import ApprovalQueue, ApprovalStatus
-from app.api.schemas import PostCreate, PostEdit, GeneratePostRequest, GeneratedPostResponse
+from app.api.schemas import PostCreate, PostEdit, GeneratePostRequest
 from app.services.workflow_engine import WorkflowEngine
 from app.agents.image_agent import ImageAgent
 from app.utils.image_cache import download_and_cache
@@ -87,6 +87,7 @@ class PostService:
             image_prompt=image_prompt,
             image_url=image_url,
             account_id=request.account_id,
+            website_source_id=(request.website_source_ids[0] if request.website_source_ids else None),
         )
 
         if mode == PostMode.MANUAL:

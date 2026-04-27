@@ -128,7 +128,7 @@ class ContentScheduler:
                         platform=platform,
                         topic=topic,
                     )
-                    post = await self._save_generated_post(generated, platform)
+                    post = await self._save_generated_post(generated, platform, source_id=source.id)
                     posts.append(post)
                     logger.info(
                         f"Generated website-grounded {post_type} post {i+1}/{count} for source={source.name}"
@@ -139,7 +139,12 @@ class ContentScheduler:
         logger.info(f"Daily generation complete: {len(posts)} posts created")
         return posts
 
-    async def _save_generated_post(self, generated: dict, platform: str) -> Post:
+    async def _save_generated_post(
+        self,
+        generated: dict,
+        platform: str,
+        source_id: int | None = None,
+    ) -> Post:
         """Save a generated post to the database with an auto-generated image."""
         post_type = PostType(generated["post_type"])
         mode = self.workflow.determine_mode(post_type)
@@ -162,6 +167,7 @@ class ContentScheduler:
             hashtags=hashtag_str,
             image_prompt=image_prompt,
             image_url=image_url,
+            website_source_id=source_id,
         )
 
         if mode == PostMode.MANUAL:

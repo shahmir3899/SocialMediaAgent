@@ -49,6 +49,9 @@ class Post(Base):
     hashtags: Mapped[str | None] = mapped_column(Text, nullable=True)
     image_prompt: Mapped[str | None] = mapped_column(Text, nullable=True)
     account_id: Mapped[int | None] = mapped_column(ForeignKey("accounts.id"), nullable=True)
+    website_source_id: Mapped[int | None] = mapped_column(
+        ForeignKey("website_sources.id"), nullable=True
+    )
     scheduled_time: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
@@ -56,6 +59,7 @@ class Post(Base):
 
     # Relationships
     account: Mapped["Account"] = relationship("Account", lazy="selectin")
+    website_source: Mapped["WebsiteSource | None"] = relationship("WebsiteSource", lazy="selectin")
     logs: Mapped[list["PostLog"]] = relationship("PostLog", back_populates="post", lazy="selectin")
     approval: Mapped["ApprovalQueue | None"] = relationship(
         "ApprovalQueue", back_populates="post", uselist=False, lazy="selectin"
@@ -64,6 +68,11 @@ class Post(Base):
     def __repr__(self) -> str:
         return f"<Post {self.id} [{self.status.value}] {self.platform}>"
 
+    @property
+    def website_source_name(self) -> str | None:
+        return self.website_source.name if self.website_source else None
+
 
 from app.models.post_log import PostLog
 from app.models.approval import ApprovalQueue
+from app.models.website_source import WebsiteSource

@@ -51,6 +51,8 @@ class PostResponse(BaseModel):
     mode: str
     post_type: str
     hashtags: str | None
+    website_source_id: int | None
+    website_source_name: str | None = None
     scheduled_time: datetime | None
     created_at: datetime
 
